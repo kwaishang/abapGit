@@ -20,12 +20,11 @@ CLASS ZCL_ABAPGIT_TRANSPORT_MASS IMPLEMENTATION.
   METHOD run.
 
     DATA:
-      lt_trkorr          TYPE trwbo_request_headers.
-
-    DATA:
+      lt_trkorr           TYPE trwbo_request_headers,
       lo_transport_zipper TYPE REF TO lcl_transport_zipper,
       lo_except           TYPE REF TO cx_root,
-      lv_folder           TYPE string.
+      lv_folder           TYPE string,
+      lv_text             TYPE string.
 
     TRY.
 
@@ -58,10 +57,10 @@ CLASS ZCL_ABAPGIT_TRANSPORT_MASS IMPLEMENTATION.
           zcx_abapgit_exception=>raise( 'No transport requests selected' ).
         ENDIF.
 
-      CATCH cx_wrong_data
-            zcx_abapgit_exception INTO lo_except.
+      CATCH zcx_abapgit_exception INTO lo_except.
 
-        MESSAGE lo_except->get_text( ) TYPE 'S' DISPLAY LIKE 'E'.
+        lv_text = lo_except->get_text( ).
+        MESSAGE lv_text TYPE 'S' DISPLAY LIKE 'E'.
 
     ENDTRY.
 
