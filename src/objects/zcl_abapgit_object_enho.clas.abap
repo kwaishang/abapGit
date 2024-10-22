@@ -2,8 +2,6 @@ CLASS zcl_abapgit_object_enho DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -20,7 +18,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
+CLASS zcl_abapgit_object_enho IMPLEMENTATION.
 
 
   METHOD factory.
@@ -29,8 +27,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
       WHEN cl_enh_tool_badi_impl=>tooltype.
         CREATE OBJECT ri_enho TYPE zcl_abapgit_object_enho_badi
           EXPORTING
-            is_item  = ms_item
-            io_files = mo_files.
+            is_item = ms_item.
       WHEN cl_enh_tool_hook_impl=>tooltype.
         CREATE OBJECT ri_enho TYPE zcl_abapgit_object_enho_hook
           EXPORTING
@@ -49,8 +46,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
       WHEN cl_wdr_cfg_enhancement=>tooltype.
         CREATE OBJECT ri_enho TYPE zcl_abapgit_object_enho_wdyc
           EXPORTING
-            is_item  = ms_item
-            io_files = mo_files.
+            is_item = ms_item.
       WHEN 'FUGRENH'.
         CREATE OBJECT ri_enho TYPE zcl_abapgit_object_enho_fugr
           EXPORTING
@@ -59,8 +55,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
       WHEN 'WDYENH'.
         CREATE OBJECT ri_enho TYPE zcl_abapgit_object_enho_wdyn
           EXPORTING
-            is_item  = ms_item
-            io_files = mo_files.
+            is_item = ms_item.
       WHEN OTHERS.
         zcx_abapgit_exception=>raise( |Unsupported ENHO type { iv_tool }| ).
     ENDCASE.
@@ -83,6 +78,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
     TRY.
         li_enh_tool = cl_enh_factory=>get_enhancement(
           enhancement_id   = lv_enh_id
+          run_dark         = abap_true
           bypassing_buffer = abap_true ).
       CATCH cx_enh_root.
         rv_user = c_user_unknown.
@@ -110,22 +106,41 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
   METHOD zif_abapgit_object~delete.
 
     DATA: lv_enh_id     TYPE enhname,
-          li_enh_object TYPE REF TO if_enh_object.
+          li_enh_object TYPE REF TO if_enh_object,
+          lx_enh_root   TYPE REF TO cx_enh_root,
+          lv_corrnum    TYPE trkorr.
 
     IF zif_abapgit_object~exists( ) = abap_false.
       RETURN.
     ENDIF.
 
+    zcl_abapgit_sotr_handler=>delete_sotr(
+      iv_pgmid    = 'R3TR'
+      iv_object   = ms_item-obj_type
+      iv_obj_name = ms_item-obj_name ).
+
+    zcl_abapgit_sots_handler=>delete_sots(
+      iv_pgmid    = 'R3TR'
+      iv_object   = ms_item-obj_type
+      iv_obj_name = ms_item-obj_name ).
+
+    lv_corrnum = iv_transport.
+
     lv_enh_id = ms_item-obj_name.
     TRY.
         li_enh_object = cl_enh_factory=>get_enhancement(
           enhancement_id = lv_enh_id
+          run_dark       = abap_true
           lock           = abap_true ).
-        li_enh_object->delete( ).
-        li_enh_object->save( run_dark = abap_true ).
+        li_enh_object->delete(
+          EXPORTING
+            nevertheless_delete = abap_true
+            run_dark            = abap_true
+          CHANGING
+            trkorr              = lv_corrnum ).
         li_enh_object->unlock( ).
-      CATCH cx_enh_root.
-        zcx_abapgit_exception=>raise( 'Error deleting ENHO' ).
+      CATCH cx_enh_root INTO lx_enh_root.
+        zcx_abapgit_exception=>raise_with_text( lx_enh_root ).
     ENDTRY.
 
   ENDMETHOD.
@@ -136,9 +151,9 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
     DATA: lv_tool TYPE enhtooltype,
           li_enho TYPE REF TO zif_abapgit_object_enho.
 
-
     IF zif_abapgit_object~exists( ) = abap_true.
-      zif_abapgit_object~delete( ).
+      zif_abapgit_object~delete( iv_package   = iv_package
+                                 iv_transport = iv_transport ).
     ENDIF.
 
     io_xml->read( EXPORTING iv_name = 'TOOL'
@@ -146,8 +161,16 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
 
     li_enho = factory( lv_tool ).
 
-    li_enho->deserialize( io_xml     = io_xml
+    li_enho->deserialize( ii_xml     = io_xml
                           iv_package = iv_package ).
+
+    zcl_abapgit_sotr_handler=>create_sotr(
+      iv_package = iv_package
+      io_xml     = io_xml ).
+
+    zcl_abapgit_sots_handler=>create_sots(
+      iv_package = iv_package
+      io_xml     = io_xml ).
 
     zcl_abapgit_objects_activation=>add_item( ms_item ).
 
@@ -163,6 +186,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
     TRY.
         cl_enh_factory=>get_enhancement(
           enhancement_id   = lv_enh_id
+          run_dark         = abap_true
           bypassing_buffer = abap_true ).
         rv_bool = abap_true.
       CATCH cx_enh_root.
@@ -173,6 +197,11 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -207,14 +236,17 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = 'ENHO'
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -222,8 +254,8 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
 
     DATA: lv_enh_id   TYPE enhname,
           li_enho     TYPE REF TO zif_abapgit_object_enho,
-          li_enh_tool TYPE REF TO if_enh_tool.
-
+          li_enh_tool TYPE REF TO if_enh_tool,
+          lx_enh_root TYPE REF TO cx_enh_root.
 
     IF zif_abapgit_object~exists( ) = abap_false.
       RETURN.
@@ -233,15 +265,30 @@ CLASS ZCL_ABAPGIT_OBJECT_ENHO IMPLEMENTATION.
     TRY.
         li_enh_tool = cl_enh_factory=>get_enhancement(
           enhancement_id   = lv_enh_id
+          run_dark         = abap_true
           bypassing_buffer = abap_true ).
-      CATCH cx_enh_root.
-        zcx_abapgit_exception=>raise( 'Error from CL_ENH_FACTORY' ).
+      CATCH cx_enh_root INTO lx_enh_root.
+        zcx_abapgit_exception=>raise_with_text( lx_enh_root ).
     ENDTRY.
 
     li_enho = factory( li_enh_tool->get_tool( ) ).
 
-    li_enho->serialize( io_xml      = io_xml
+    li_enho->serialize( ii_xml      = io_xml
                         ii_enh_tool = li_enh_tool ).
+
+    zcl_abapgit_sotr_handler=>read_sotr(
+      iv_pgmid       = 'R3TR'
+      iv_object      = ms_item-obj_type
+      iv_obj_name    = ms_item-obj_name
+      io_i18n_params = mo_i18n_params
+      io_xml         = io_xml ).
+
+    zcl_abapgit_sots_handler=>read_sots(
+      iv_pgmid       = 'R3TR'
+      iv_object      = ms_item-obj_type
+      iv_obj_name    = ms_item-obj_name
+      io_i18n_params = mo_i18n_params
+      io_xml         = io_xml ).
 
   ENDMETHOD.
 ENDCLASS.

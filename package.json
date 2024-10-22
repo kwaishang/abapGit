@@ -1,20 +1,36 @@
 {
   "license": "MIT",
+  "private": true,
   "scripts": {
-    "pretest": "abaplint --version && abaplint \"src/**/*.*\"",
-    "test": "npm run eslint",
-    "posttest": "abapmerge src/zabapgit.prog.abap > zabapgit.abap",
-    "_disabled_posttest": "abaplint zabapgit.abap",
-    "lint": "abaplint \"src/**/*.*\"",
+    "test": "npm run eslint && npm run abaplint",
+    "merge": "abapmerge -f src/zabapgit.prog.abap -c zabapgit_standalone -o zabapgit.abap",
+    "merge.ci": "cp zabapgit.abap ci/zabapgit_standalone.prog.abap && cd ci && abaplint --format codeframe && cd ..",
+    "build": "rm -rf output && abap_transpile test/abap_transpile.json",
+    "unit": "npm run build && echo RUNNING && node output/index.mjs",
+    "coverage": "npm run unit && c8 node output/index.mjs && c8 report --reporter=html",
+    "integration": "rm -rf output && cp test/abap_transpile.json test/abap_transpile_int.json && sed -i 's/src,deps/test\\/src,src,deps/g' test/abap_transpile_int.json && abap_transpile test/abap_transpile_int.json && cp -f src/ui/zabapgit_icon_font.w3mi.data.woff output/ && echo RUNNING && node output/index.mjs",
+    "abaplint": "abaplint --format codeframe",
     "eslint": "eslint src"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/larshp/abapGit.git"
+    "url": "git+https://github.com/abapGit/abapGit.git"
+  },
+  "c8": {
+    "all": true,
+    "src": [
+      "src"
+    ]
   },
   "devDependencies": {
-    "abaplint": "^1.5.0",
-    "abapmerge": "^0.11.5",
-    "eslint": "^5.11.1"
+    "@abaplint/cli": "^2.113.21",
+    "@abaplint/database-sqlite": "^2.10.20",
+    "@abaplint/runtime": "^2.10.20",
+    "express": "^4.21.1",
+    "@abaplint/transpiler-cli": "^2.10.20",
+    "globals": "^15.11.0",
+    "abapmerge": "^0.16.6",
+    "c8": "^10.1.2",
+    "eslint": "^9.12.0"
   }
 }

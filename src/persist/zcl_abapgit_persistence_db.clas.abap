@@ -3,13 +3,15 @@ CLASS zcl_abapgit_persistence_db DEFINITION
   CREATE PRIVATE .
 
   PUBLIC SECTION.
-    CONSTANTS c_tabname TYPE tabname VALUE 'ZABAPGIT' ##NO_TEXT.
-    CONSTANTS c_lock TYPE viewname VALUE 'EZABAPGIT' ##NO_TEXT.
+    CONSTANTS c_tabname TYPE c LENGTH 30 VALUE 'ZABAPGIT' ##NO_TEXT.
+    CONSTANTS c_lock TYPE c LENGTH 30 VALUE 'EZABAPGIT' ##NO_TEXT.
 
     CONSTANTS:
       c_type_settings   TYPE zif_abapgit_persistence=>ty_type VALUE 'SETTINGS' ##NO_TEXT,
       c_type_repo       TYPE zif_abapgit_persistence=>ty_type VALUE 'REPO' ##NO_TEXT,
+      c_type_repo_csum  TYPE zif_abapgit_persistence=>ty_type VALUE 'REPO_CS' ##NO_TEXT,
       c_type_background TYPE zif_abapgit_persistence=>ty_type VALUE 'BACKGROUND' ##NO_TEXT,
+      c_type_packages   TYPE zif_abapgit_persistence=>ty_type VALUE 'PACKAGES' ##NO_TEXT,
       c_type_user       TYPE zif_abapgit_persistence=>ty_type VALUE 'USER' ##NO_TEXT.
 
     CLASS-METHODS get_instance
@@ -30,12 +32,16 @@ CLASS zcl_abapgit_persistence_db DEFINITION
         zcx_abapgit_exception .
     METHODS list
       RETURNING
-        VALUE(rt_content) TYPE zif_abapgit_persistence=>tt_content .
+        VALUE(rt_content) TYPE zif_abapgit_persistence=>ty_contents .
     METHODS list_by_type
       IMPORTING
         !iv_type          TYPE zif_abapgit_persistence=>ty_type
       RETURNING
-        VALUE(rt_content) TYPE zif_abapgit_persistence=>tt_content .
+        VALUE(rt_content) TYPE zif_abapgit_persistence=>ty_contents .
+    METHODS list_by_keys
+      IMPORTING it_keys            TYPE zif_abapgit_persistence=>ty_repo_keys
+                iv_type            TYPE zif_abapgit_persistence=>ty_type
+      RETURNING VALUE(rt_contents) TYPE zif_abapgit_persistence=>ty_contents.
     METHODS lock
       IMPORTING
         !iv_mode  TYPE enqmode DEFAULT 'E'
@@ -65,6 +71,12 @@ CLASS zcl_abapgit_persistence_db DEFINITION
         !iv_data  TYPE zif_abapgit_persistence=>ty_content-data_str
       RAISING
         zcx_abapgit_exception .
+    CLASS-METHODS validate_entry_type
+      IMPORTING
+        !iv_type TYPE zif_abapgit_persistence=>ty_type
+      RAISING
+        zcx_abapgit_exception .
+
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -92,6 +104,7 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
 
     DATA ls_table TYPE zif_abapgit_persistence=>ty_content.
 
+    validate_entry_type( iv_type ).
     ls_table-type  = iv_type.
     ls_table-value = iv_value.
     ls_table-data_str = iv_data.
@@ -107,12 +120,10 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
     lock( iv_type  = iv_type
           iv_value = iv_value ).
 
+    " Ignore errors since record might not exist
     DELETE FROM (c_tabname)
       WHERE type = iv_type
       AND value = iv_value.
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'DB Delete failed' ).
-    ENDIF.
 
   ENDMETHOD.
 
@@ -130,13 +141,7 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
   METHOD get_update_function.
     IF mv_update_function IS INITIAL.
       mv_update_function = 'CALL_V1_PING'.
-      CALL FUNCTION 'FUNCTION_EXISTS'
-        EXPORTING
-          funcname = mv_update_function
-        EXCEPTIONS
-          OTHERS   = 2.
-
-      IF sy-subrc <> 0.
+      IF zcl_abapgit_factory=>get_function_module( )->function_exists( mv_update_function ) = abap_false.
         mv_update_function = 'BANK_OBJ_WORKL_RELEASE_LOCKS'.
       ENDIF.
     ENDIF.
@@ -148,6 +153,17 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
   METHOD list.
     SELECT * FROM (c_tabname)
       INTO TABLE rt_content.                              "#EC CI_SUBRC
+  ENDMETHOD.
+
+
+  METHOD list_by_keys.
+    FIELD-SYMBOLS: <ls_key> LIKE LINE OF it_keys.
+    LOOP AT it_keys ASSIGNING <ls_key>.
+      SELECT * FROM (c_tabname)
+      APPENDING TABLE rt_contents
+      WHERE value = <ls_key> AND
+            type  = iv_type.
+    ENDLOOP.
   ENDMETHOD.
 
 
@@ -172,7 +188,7 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
         system_failure = 2
         OTHERS         = 3.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |Could not aquire lock { iv_type } { iv_value }| ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     lv_dummy_update_function = get_update_function( ).
@@ -219,14 +235,18 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
 
     DATA lv_data LIKE iv_data.
 
-    lv_data = validate_and_unprettify_xml( iv_data ).
+    IF iv_data CS '<?xml'.
+      lv_data = validate_and_unprettify_xml( iv_data ).
+    ELSE.
+      lv_data = iv_data.
+    ENDIF.
 
     lock( iv_type  = iv_type
           iv_value = iv_value ).
 
     UPDATE (c_tabname) SET data_str = lv_data
       WHERE type  = iv_type
-      AND   value = iv_value.
+      AND value = iv_value.
     IF sy-subrc <> 0.
       zcx_abapgit_exception=>raise( 'DB update failed' ).
     ENDIF.
@@ -240,6 +260,21 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_DB IMPLEMENTATION.
       iv_xml           = iv_xml
       iv_unpretty      = abap_true
       iv_ignore_errors = abap_false ).
+
+  ENDMETHOD.
+
+
+  METHOD validate_entry_type.
+
+    IF NOT (
+      iv_type = c_type_repo OR
+      iv_type = c_type_repo_csum OR
+      iv_type = c_type_user OR
+      iv_type = c_type_settings OR
+      iv_type = c_type_background OR
+      iv_type = c_type_packages ).
+      zcx_abapgit_exception=>raise( |Invalid DB entry type [{ iv_type }]| ).
+    ENDIF.
 
   ENDMETHOD.
 ENDCLASS.

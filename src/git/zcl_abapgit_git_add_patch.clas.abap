@@ -12,7 +12,7 @@ CLASS zcl_abapgit_git_add_patch DEFINITION
 
       get_patch
         RETURNING
-          VALUE(rt_patch) TYPE stringtab
+          VALUE(rt_patch) TYPE string_table
         RAISING
           zcx_abapgit_exception,
 
@@ -21,20 +21,18 @@ CLASS zcl_abapgit_git_add_patch DEFINITION
           VALUE(rv_patch_binary) TYPE xstring
         RAISING
           zcx_abapgit_exception.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     DATA:
       mt_diff  TYPE zif_abapgit_definitions=>ty_diffs_tt,
-      mt_patch TYPE stringtab.
+      mt_patch TYPE string_table.
 
     METHODS:
       calculate_patch
         RETURNING
-          VALUE(rt_patch) TYPE stringtab
+          VALUE(rt_patch) TYPE string_table
         RAISING
           zcx_abapgit_exception.
-
 ENDCLASS.
 
 
@@ -49,9 +47,9 @@ CLASS ZCL_ABAPGIT_GIT_ADD_PATCH IMPLEMENTATION.
     LOOP AT mt_diff ASSIGNING <ls_diff>.
 
       CASE <ls_diff>-result.
-        WHEN ' '.
+        WHEN zif_abapgit_definitions=>c_diff-unchanged.
 
-          INSERT <ls_diff>-new INTO TABLE rt_patch.
+          INSERT <ls_diff>-old INTO TABLE rt_patch.
 
         WHEN zif_abapgit_definitions=>c_diff-insert.
 
@@ -110,8 +108,8 @@ CLASS ZCL_ABAPGIT_GIT_ADD_PATCH IMPLEMENTATION.
       mt_patch = calculate_patch( ).
     ENDIF.
 
-    CONCATENATE LINES OF mt_patch INTO lv_string SEPARATED BY zif_abapgit_definitions=>c_newline.
-    lv_string = lv_string && zif_abapgit_definitions=>c_newline.
+    CONCATENATE LINES OF mt_patch INTO lv_string SEPARATED BY cl_abap_char_utilities=>newline.
+    lv_string = lv_string && cl_abap_char_utilities=>newline.
 
     rv_patch_binary = zcl_abapgit_convert=>string_to_xstring_utf8( lv_string ).
 

@@ -1,3 +1,28 @@
+CLASS ltcl_progress_double DEFINITION CREATE PUBLIC FOR TESTING.
+
+  PUBLIC SECTION.
+    INTERFACES zif_abapgit_progress.
+  PROTECTED SECTION.
+  PRIVATE SECTION.
+
+ENDCLASS.
+
+CLASS ltcl_progress_double IMPLEMENTATION.
+
+  METHOD zif_abapgit_progress~set_total.
+    RETURN.
+  ENDMETHOD.
+
+  METHOD zif_abapgit_progress~show.
+    RETURN.
+  ENDMETHOD.
+
+  METHOD zif_abapgit_progress~off.
+    RETURN.
+  ENDMETHOD.
+
+ENDCLASS.
+
 CLASS ltcl_tree DEFINITION FOR TESTING DURATION SHORT RISK LEVEL HARMLESS FINAL.
 
   PRIVATE SECTION.
@@ -18,7 +43,7 @@ CLASS ltcl_tree IMPLEMENTATION.
           lt_result TYPE zcl_abapgit_git_pack=>ty_nodes_tt.
 
     CLEAR ls_node.
-    ls_node-chmod = zif_abapgit_definitions=>c_chmod-file.
+    ls_node-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     ls_node-name = 'foobar.txt'.
     ls_node-sha1 = '5f46cb3c4b7f0b3600b64f744cde614a283a88dc'.
     APPEND ls_node TO lt_nodes.
@@ -40,13 +65,13 @@ CLASS ltcl_tree IMPLEMENTATION.
           lt_result TYPE zcl_abapgit_git_pack=>ty_nodes_tt.
 
     CLEAR ls_node.
-    ls_node-chmod = zif_abapgit_definitions=>c_chmod-file.
+    ls_node-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     ls_node-name = 'foobar.txt'.
     ls_node-sha1 = '5f46cb3c4b7f0b3600b64f744cde614a283a88dc'.
     APPEND ls_node TO lt_nodes.
 
     CLEAR ls_node.
-    ls_node-chmod = zif_abapgit_definitions=>c_chmod-file.
+    ls_node-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     ls_node-name = 'something.md'.
     ls_node-sha1 = '1236cb3c4b7f0b3600b64f744cde614a283a88dc'.
     APPEND ls_node TO lt_nodes.
@@ -68,7 +93,7 @@ CLASS ltcl_tree IMPLEMENTATION.
           lt_result TYPE zcl_abapgit_git_pack=>ty_nodes_tt.
 
     CLEAR ls_node.
-    ls_node-chmod = zif_abapgit_definitions=>c_chmod-file.
+    ls_node-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     ls_node-name = 'foobar.txt'.
     ls_node-sha1 = '0000003c4b7f0b3600b64f744cde614a28000000'.
     APPEND ls_node TO lt_nodes.
@@ -95,7 +120,7 @@ CLASS ltcl_type_and_length DEFINITION FOR TESTING DURATION SHORT RISK LEVEL HARM
       test
         IMPORTING
           iv_length   TYPE i
-          iv_type     TYPE zif_abapgit_definitions=>ty_type DEFAULT zif_abapgit_definitions=>c_type-commit
+          iv_type     TYPE zif_abapgit_git_definitions=>ty_type DEFAULT zif_abapgit_git_definitions=>c_type-commit
           iv_expected TYPE xstring
         RAISING
           zcx_abapgit_exception,
@@ -154,7 +179,7 @@ CLASS ltcl_type_and_length IMPLEMENTATION.
   METHOD type_and_length_90000.
 
     test( iv_length   = 90000
-          iv_type     = zif_abapgit_definitions=>c_type-blob
+          iv_type     = zif_abapgit_git_definitions=>c_type-blob
           iv_expected = 'B0F92B' ).
 
   ENDMETHOD.
@@ -224,12 +249,16 @@ CLASS ltcl_pack DEFINITION FOR TESTING DURATION SHORT RISK LEVEL HARMLESS FINAL.
 
   PRIVATE SECTION.
 
-    CONSTANTS: c_sha TYPE zif_abapgit_definitions=>ty_sha1 VALUE '5f46cb3c4b7f0b3600b64f744cde614a283a88dc'.
+    CONSTANTS: c_sha TYPE zif_abapgit_git_definitions=>ty_sha1 VALUE '5f46cb3c4b7f0b3600b64f744cde614a283a88dc'.
+
+    METHODS setup.
 
     METHODS:
       commit FOR TESTING
         RAISING zcx_abapgit_exception,
       commit_newline FOR TESTING
+        RAISING zcx_abapgit_exception,
+      signed_commit FOR TESTING
         RAISING zcx_abapgit_exception,
       pack_short FOR TESTING
         RAISING zcx_abapgit_exception,
@@ -251,6 +280,13 @@ ENDCLASS.
 
 CLASS ltcl_pack IMPLEMENTATION.
 
+  METHOD setup.
+    DATA lo_progress_double TYPE REF TO ltcl_progress_double.
+    CREATE OBJECT lo_progress_double TYPE ltcl_progress_double.
+
+    zcl_abapgit_progress=>set_instance( lo_progress_double ).
+  ENDMETHOD.
+
   METHOD sort_tree1.
 
     DATA: lt_tree TYPE zcl_abapgit_git_pack=>ty_nodes_tt.
@@ -259,12 +295,12 @@ CLASS ltcl_pack IMPLEMENTATION.
 
 
     APPEND INITIAL LINE TO lt_tree ASSIGNING <ls_tree>.
-    <ls_tree>-chmod = zif_abapgit_definitions=>c_chmod-file.
+    <ls_tree>-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     <ls_tree>-name  = 'b.txt'.
     <ls_tree>-sha1  = '0123'.
 
     APPEND INITIAL LINE TO lt_tree ASSIGNING <ls_tree>.
-    <ls_tree>-chmod = zif_abapgit_definitions=>c_chmod-file.
+    <ls_tree>-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     <ls_tree>-name  = 'a.txt'.
     <ls_tree>-sha1  = '0123'.
 
@@ -287,12 +323,12 @@ CLASS ltcl_pack IMPLEMENTATION.
 
 
     APPEND INITIAL LINE TO lt_tree ASSIGNING <ls_tree>.
-    <ls_tree>-chmod = zif_abapgit_definitions=>c_chmod-file.
+    <ls_tree>-chmod = zif_abapgit_git_definitions=>c_chmod-file.
     <ls_tree>-name  = 'foo.txt'.
     <ls_tree>-sha1  = '0123'.
 
     APPEND INITIAL LINE TO lt_tree ASSIGNING <ls_tree>.
-    <ls_tree>-chmod = zif_abapgit_definitions=>c_chmod-dir.
+    <ls_tree>-chmod = zif_abapgit_git_definitions=>c_chmod-dir.
     <ls_tree>-name  = 'foo'.
     <ls_tree>-sha1  = '0123'.
 
@@ -310,7 +346,7 @@ CLASS ltcl_pack IMPLEMENTATION.
   METHOD pack_multiple.
 
     CONSTANTS: lc_data TYPE x LENGTH 15 VALUE '123456789ABCDEF545794254754554',
-               lc_sha  TYPE zif_abapgit_definitions=>ty_sha1 VALUE '5f46cb3c4b7f0b3600b64f744cde614a283a88dc'.
+               lc_sha  TYPE zif_abapgit_git_definitions=>ty_sha1 VALUE '5f46cb3c4b7f0b3600b64f744cde614a283a88dc'.
 
     DATA: lt_objects TYPE zif_abapgit_definitions=>ty_objects_tt,
           ls_object  LIKE LINE OF lt_objects,
@@ -324,8 +360,8 @@ CLASS ltcl_pack IMPLEMENTATION.
 * blob
     lv_data = lc_data.
     CLEAR ls_object.
-    ls_object-sha1 = zcl_abapgit_hash=>sha1( iv_type = zif_abapgit_definitions=>c_type-blob iv_data = lv_data ).
-    ls_object-type = zif_abapgit_definitions=>c_type-blob.
+    ls_object-sha1 = zcl_abapgit_hash=>sha1_blob( lv_data ).
+    ls_object-type = zif_abapgit_git_definitions=>c_type-blob.
     ls_object-data = lv_data.
     ls_object-index = 1.
     ls_object-adler32 = zcl_abapgit_hash=>adler32( lv_data ).
@@ -340,8 +376,8 @@ CLASS ltcl_pack IMPLEMENTATION.
     ls_commit-body      = 'body'.
     lv_data = zcl_abapgit_git_pack=>encode_commit( ls_commit ).
     CLEAR ls_object.
-    ls_object-sha1 = zcl_abapgit_hash=>sha1( iv_type = zif_abapgit_definitions=>c_type-commit iv_data = lv_data ).
-    ls_object-type = zif_abapgit_definitions=>c_type-commit.
+    ls_object-sha1 = zcl_abapgit_hash=>sha1_commit( lv_data ).
+    ls_object-type = zif_abapgit_git_definitions=>c_type-commit.
     ls_object-data = lv_data.
     ls_object-index = 2.
     ls_object-adler32 = zcl_abapgit_hash=>adler32( lv_data ).
@@ -355,8 +391,8 @@ CLASS ltcl_pack IMPLEMENTATION.
     APPEND ls_node TO lt_nodes.
     lv_data = zcl_abapgit_git_pack=>encode_tree( lt_nodes ).
     CLEAR ls_object.
-    ls_object-sha1 = zcl_abapgit_hash=>sha1( iv_type = zif_abapgit_definitions=>c_type-tree iv_data = lv_data ).
-    ls_object-type = zif_abapgit_definitions=>c_type-tree.
+    ls_object-sha1 = zcl_abapgit_hash=>sha1_tree( lv_data ).
+    ls_object-type = zif_abapgit_git_definitions=>c_type-tree.
     ls_object-data = lv_data.
     ls_object-index = 3.
     ls_object-adler32 = zcl_abapgit_hash=>adler32( lv_data ).
@@ -375,9 +411,8 @@ CLASS ltcl_pack IMPLEMENTATION.
 
   METHOD object_blob.
 
-    rs_object-sha1 = zcl_abapgit_hash=>sha1( iv_type = zif_abapgit_definitions=>c_type-blob
-                                             iv_data = iv_data ).
-    rs_object-type = zif_abapgit_definitions=>c_type-blob.
+    rs_object-sha1 = zcl_abapgit_hash=>sha1_blob( iv_data ).
+    rs_object-type = zif_abapgit_git_definitions=>c_type-blob.
     rs_object-data = iv_data.
     rs_object-index = 1.
     rs_object-adler32 = zcl_abapgit_hash=>adler32( iv_data ).
@@ -472,8 +507,31 @@ CLASS ltcl_pack IMPLEMENTATION.
     ls_commit-author    = 'larshp <larshp@hotmail.com> 1387823471 +0100'.
     ls_commit-committer = 'larshp <larshp@hotmail.com> 1387823471 +0100'.
     ls_commit-body      = 'very informative'
-                        && zif_abapgit_definitions=>c_newline
-                        && zif_abapgit_definitions=>c_newline.
+                        && cl_abap_char_utilities=>newline
+                        && cl_abap_char_utilities=>newline.
+
+    lv_data = zcl_abapgit_git_pack=>encode_commit( ls_commit ).
+    ls_result = zcl_abapgit_git_pack=>decode_commit( lv_data ).
+
+    cl_abap_unit_assert=>assert_equals(
+        exp = ls_commit
+        act = ls_result ).
+
+  ENDMETHOD.
+
+  METHOD signed_commit.
+
+    DATA: ls_commit TYPE zcl_abapgit_git_pack=>ty_commit,
+          ls_result TYPE zcl_abapgit_git_pack=>ty_commit,
+          lv_data   TYPE xstring.
+
+    ls_commit-tree      = c_sha.
+    ls_commit-parent    = c_sha.
+    ls_commit-author    = 'larshp <larshp@hotmail.com> 1387823471 +0100'.
+    ls_commit-committer = 'larshp <larshp@hotmail.com> 1387823471 +0100'.
+    ls_commit-body      = 'very informative'.
+    ls_commit-gpgsig    = '-----END PGP SIGNATURE-----'
+                          && |{ cl_abap_char_utilities=>newline } { cl_abap_char_utilities=>newline }|.
 
     lv_data = zcl_abapgit_git_pack=>encode_commit( ls_commit ).
     ls_result = zcl_abapgit_git_pack=>decode_commit( lv_data ).
@@ -520,7 +578,7 @@ CLASS ltcl_git_pack_decode_commit IMPLEMENTATION.
 
   METHOD add.
 
-    CONCATENATE mv_str iv_string zif_abapgit_definitions=>c_newline INTO mv_str.
+    CONCATENATE mv_str iv_string cl_abap_char_utilities=>newline INTO mv_str.
 
   ENDMETHOD.
 
@@ -682,6 +740,88 @@ CLASS ltcl_tag IMPLEMENTATION.
     cl_abap_unit_assert=>assert_equals(
       exp = 'This is an annotated tag'
       act = ls_tag-message ).
+
+  ENDMETHOD.
+
+ENDCLASS.
+
+CLASS ltcl_get_length DEFINITION DEFERRED.
+CLASS zcl_abapgit_git_pack DEFINITION LOCAL FRIENDS ltcl_get_length.
+
+CLASS ltcl_get_length DEFINITION FOR TESTING DURATION SHORT RISK LEVEL HARMLESS FINAL.
+
+  PRIVATE SECTION.
+    METHODS:
+      test
+        IMPORTING
+          iv_data     TYPE xstring
+          iv_expected TYPE i,
+      length_0 FOR TESTING RAISING zcx_abapgit_exception,
+      length_1 FOR TESTING RAISING zcx_abapgit_exception,
+      length_15 FOR TESTING RAISING zcx_abapgit_exception,
+      length_31 FOR TESTING RAISING zcx_abapgit_exception,
+      length_22783 FOR TESTING RAISING zcx_abapgit_exception.
+
+ENDCLASS.
+
+CLASS ltcl_get_length IMPLEMENTATION.
+
+  METHOD test.
+
+    DATA lv_length TYPE i.
+    DATA lv_data TYPE xstring.
+
+    lv_data = iv_data.
+
+    zcl_abapgit_git_pack=>get_length(
+      IMPORTING
+        ev_length = lv_length
+      CHANGING
+        cv_data   = lv_data ).
+
+    cl_abap_unit_assert=>assert_equals(
+      act = lv_length
+      exp = iv_expected ).
+
+  ENDMETHOD.
+
+  METHOD length_0.
+
+    test(
+      iv_data     = '00'
+      iv_expected = 0 ).
+
+  ENDMETHOD.
+
+  METHOD length_1.
+
+    test(
+      iv_data     = '01'
+      iv_expected = 1 ).
+
+  ENDMETHOD.
+
+  METHOD length_15.
+* four least significant bits set
+    test(
+      iv_data     = '0F'
+      iv_expected = 15 ).
+
+  ENDMETHOD.
+
+  METHOD length_31.
+
+    test(
+      iv_data     = '8F01'
+      iv_expected = 31 ).
+
+  ENDMETHOD.
+
+  METHOD length_22783.
+
+    test(
+      iv_data     = '8F8F0B'
+      iv_expected = 22783 ).
 
   ENDMETHOD.
 

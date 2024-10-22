@@ -108,7 +108,7 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
   METHOD set_business_msgs.
 
     DATA:
-      lt_buss_msg_ref   TYPE zif_abapgit_ecatt=>etvo_bus_msg_tabtype,
+      lt_buss_msg_ref   TYPE zif_abapgit_ecatt=>ty_bus_msgs,
       li_element        TYPE REF TO if_ixml_element,
       li_insert_objects TYPE REF TO if_ixml_element,
       lo_ecatt_vo       TYPE REF TO object.
@@ -146,7 +146,7 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
 
     li_insert_objects ?= template_over_all->find_from_name( 'BUSINESS_MESSAGES' ).
 
-    li_insert_objects->append_child( new_child = li_element ).
+    li_insert_objects->append_child( li_element ).
 
   ENDMETHOD.
 
@@ -154,8 +154,8 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
   METHOD set_ecatt_flags.
 
     DATA:
-      lv_invert_validation TYPE zif_abapgit_ecatt=>etvo_invert_validation,
-      lv_error_prio        TYPE zif_abapgit_ecatt=>etvo_error_prio,
+      lv_invert_validation TYPE zif_abapgit_ecatt=>ty_invert_validation,
+      lv_error_prio        TYPE zif_abapgit_ecatt=>ty_error_prio,
       li_element           TYPE REF TO if_ixml_element,
       li_insert_objects    TYPE REF TO if_ixml_element,
       lo_ecatt_vo          TYPE REF TO object.
@@ -193,7 +193,7 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
 
     li_insert_objects ?= template_over_all->find_from_name( 'VO_FLAGS' ).
 
-    li_insert_objects->append_child( new_child = li_element ).
+    li_insert_objects->append_child( li_element ).
 
     CALL METHOD lo_ecatt_vo->('GET_ERROR_PRIORITY')
       RECEIVING
@@ -217,7 +217,7 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
 
     li_insert_objects = template_over_all->find_from_name( 'VO_FLAGS' ).
 
-    li_insert_objects->append_child( new_child = li_element ).
+    li_insert_objects->append_child( li_element ).
 
   ENDMETHOD.
 
@@ -225,7 +225,7 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
   METHOD set_ecatt_impl_detail.
 
     DATA:
-      ls_impl_details   TYPE zif_abapgit_ecatt=>etvoimpl_det,
+      ls_impl_details   TYPE zif_abapgit_ecatt=>ty_impl_det,
       li_element        TYPE REF TO if_ixml_element,
       li_insert_objects TYPE REF TO if_ixml_element,
       lo_ecatt_vo       TYPE REF TO object.
@@ -264,7 +264,7 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
 
     li_insert_objects = template_over_all->find_from_name( 'IMPL_DETAILS' ).
 
-    li_insert_objects->append_child( new_child = li_element ).
+    li_insert_objects->append_child( li_element ).
 
   ENDMETHOD.
 
@@ -274,5 +274,4 @@ CLASS ZCL_ABAPGIT_ECATT_VAL_OBJ_DOWN IMPLEMENTATION.
     rv_xml_stream = mv_xml_stream.
 
   ENDMETHOD.
-
 ENDCLASS.

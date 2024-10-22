@@ -2,8 +2,6 @@ CLASS zcl_abapgit_object_wapa DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_page,
@@ -24,10 +22,12 @@ CLASS zcl_abapgit_object_wapa DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
         RAISING   zcx_abapgit_exception,
       to_page_content
         IMPORTING iv_content        TYPE xstring
-        RETURNING VALUE(rt_content) TYPE o2pageline_table,
+        RETURNING VALUE(rt_content) TYPE o2pageline_table
+        RAISING   zcx_abapgit_exception,
       read_page
-        IMPORTING is_page        TYPE o2pagattr
-        RETURNING VALUE(rs_page) TYPE ty_page
+        IMPORTING is_page         TYPE o2pagattr
+                  iv_no_files_add TYPE abap_bool OPTIONAL
+        RETURNING VALUE(rs_page)  TYPE ty_page
         RAISING   zcx_abapgit_exception,
       create_new_application
         IMPORTING is_attributes TYPE o2applattr
@@ -45,7 +45,7 @@ CLASS zcl_abapgit_object_wapa DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
       delete_superfluous_pages
         IMPORTING
           it_local_pages  TYPE o2pagelist
-          it_remote_pages TYPE zcl_abapgit_object_wapa=>ty_pages_tt
+          it_remote_pages TYPE ty_pages_tt
         RAISING
           zcx_abapgit_exception.
 
@@ -53,7 +53,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
+CLASS zcl_abapgit_object_wapa IMPLEMENTATION.
 
 
   METHOD create_new_application.
@@ -125,7 +125,7 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
     DATA: ls_pagekey TYPE o2pagkey.
     FIELD-SYMBOLS: <ls_local_page> LIKE LINE OF it_local_pages.
 
-    " delete local pages which doesn't exists remotely
+    " delete local pages which doesn't exist remotely
     LOOP AT it_local_pages ASSIGNING <ls_local_page>.
 
       READ TABLE it_remote_pages WITH KEY attributes-pagekey = <ls_local_page>-pagekey
@@ -171,7 +171,7 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
       zcx_abapgit_exception=>raise( |WAPA - error from get_page_content| ).
     ENDIF.
 
-    CONCATENATE LINES OF lt_content INTO lv_string SEPARATED BY zif_abapgit_definitions=>c_newline RESPECTING BLANKS.
+    CONCATENATE LINES OF lt_content INTO lv_string SEPARATED BY cl_abap_char_utilities=>newline RESPECTING BLANKS.
 
     rv_content = zcl_abapgit_convert=>string_to_xstring_utf8( lv_string ).
 
@@ -199,9 +199,7 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
       IMPORTING
         p_page    = lo_page ).
 
-    lo_page->get_attrs(
-      IMPORTING
-        p_attrs = rs_page-attributes ).
+    lo_page->get_attrs( IMPORTING p_attrs = rs_page-attributes ).
 
     IF rs_page-attributes-pagetype <> so2_controller.
 
@@ -235,10 +233,12 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
       SPLIT is_page-pagename AT '.' INTO lv_extra lv_ext.
       REPLACE ALL OCCURRENCES OF '/' IN lv_ext WITH '_-'.
       REPLACE ALL OCCURRENCES OF '/' IN lv_extra WITH '_-'.
-      mo_files->add_raw(
-        iv_extra = lv_extra
-        iv_ext   = lv_ext
-        iv_data  = lv_content ).
+      IF iv_no_files_add = abap_false.
+        mo_files->add_raw(
+          iv_extra = lv_extra
+          iv_ext   = lv_ext
+          iv_data  = lv_content ).
+      ENDIF.
 
       CLEAR: rs_page-attributes-implclass.
 
@@ -263,7 +263,7 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
 
     lv_string = zcl_abapgit_convert=>xstring_to_string_utf8( iv_content ).
 
-    SPLIT lv_string AT zif_abapgit_definitions=>c_newline INTO TABLE rt_content.
+    SPLIT lv_string AT cl_abap_char_utilities=>newline INTO TABLE rt_content.
 
   ENDMETHOD.
 
@@ -277,13 +277,12 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
 
     lv_name = ms_item-obj_name.
 
-    SELECT * FROM o2pagdir INTO TABLE lt_pages WHERE applname = lv_name.
+    SELECT * FROM o2pagdir INTO TABLE lt_pages WHERE applname = lv_name
+      ORDER BY changedon DESCENDING changetime DESCENDING.
     IF sy-subrc <> 0.
       rv_user = c_user_unknown.
       RETURN.
     ENDIF.
-
-    SORT lt_pages BY changedon DESCENDING changetime DESCENDING.
 
     READ TABLE lt_pages INDEX 1 INTO ls_latest.
     ASSERT sy-subrc = 0.
@@ -402,13 +401,12 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
           lo_page           TYPE REF TO cl_o2_api_pages,
           lt_pages_info     TYPE ty_pages_tt,
           ls_pagekey        TYPE o2pagkey,
-          ls_local_page     TYPE zcl_abapgit_object_wapa=>ty_page,
+          ls_local_page     TYPE ty_page,
           lt_remote_content TYPE o2pageline_table,
           lt_local_content  TYPE o2pageline_table,
           lt_local_pages    TYPE o2pagelist.
 
-    FIELD-SYMBOLS: <ls_remote_page>       LIKE LINE OF lt_pages_info.
-
+    FIELD-SYMBOLS: <ls_remote_page> LIKE LINE OF lt_pages_info.
 
     io_xml->read( EXPORTING iv_name = 'ATTRIBUTES'
                   CHANGING cg_data = ls_attributes ).
@@ -470,7 +468,8 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
       CASE sy-subrc.
         WHEN 0.
 
-          ls_local_page = read_page( <ls_remote_page>-attributes ).
+          ls_local_page = read_page( is_page = <ls_remote_page>-attributes
+                                     iv_no_files_add = abap_true ).
 
         WHEN 1.
 
@@ -494,8 +493,7 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
                                                                iv_ext   = lv_ext ) ).
       lt_local_content = to_page_content( get_page_content( lo_page ) ).
 
-      IF ls_local_page = <ls_remote_page>
-      AND lt_local_content = lt_remote_content.
+      IF ls_local_page = <ls_remote_page> AND lt_local_content = lt_remote_content.
         " no changes -> nothing to do
         CONTINUE.
       ENDIF.
@@ -525,6 +523,10 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
     delete_superfluous_pages( it_local_pages  = lt_local_pages
                               it_remote_pages = lt_pages_info ).
 
+    zcl_abapgit_sotr_handler=>create_sotr(
+      iv_package = iv_package
+      io_xml     = io_xml ).
+
   ENDMETHOD.
 
 
@@ -552,6 +554,11 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -575,14 +582,17 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = ms_item-obj_type
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -596,7 +606,6 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
           lo_bsp        TYPE REF TO cl_o2_api_application.
 
     FIELD-SYMBOLS: <ls_page> LIKE LINE OF lt_pages.
-
 
     lv_name = ms_item-obj_name.
 
@@ -650,6 +659,13 @@ CLASS ZCL_ABAPGIT_OBJECT_WAPA IMPLEMENTATION.
 
     io_xml->add( iv_name = 'PAGES'
                  ig_data = lt_pages_info ).
+
+    zcl_abapgit_sotr_handler=>read_sotr(
+      iv_pgmid    = 'LIMU'
+      iv_object   = 'WAPP'
+      iv_obj_name = ms_item-obj_name
+      io_i18n_params = mo_i18n_params
+      io_xml      = io_xml ).
 
   ENDMETHOD.
 ENDCLASS.

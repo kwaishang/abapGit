@@ -6,10 +6,10 @@ CLASS zcl_abapgit_object_ucsa DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
   PROTECTED SECTION.
   PRIVATE SECTION.
     CONSTANTS:
-    BEGIN OF c_version,
-      active   TYPE r3state VALUE 'A',
-      inactive TYPE r3state VALUE 'I',
-    END OF c_version .
+      BEGIN OF c_version,
+        active   TYPE r3state VALUE 'A',
+        inactive TYPE r3state VALUE 'I',
+      END OF c_version .
 
     TYPES:
       ty_id TYPE c LENGTH 30.
@@ -35,7 +35,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
+CLASS zcl_abapgit_object_ucsa IMPLEMENTATION.
 
 
   METHOD clear_dynamic_fields.
@@ -99,7 +99,38 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
 
   METHOD zif_abapgit_object~changed_by.
 
-    rv_user = c_user_unknown.
+    DATA: lv_id                     TYPE ty_id,
+          lx_root                   TYPE REF TO cx_root,
+          lo_persistence            TYPE REF TO object,
+          lr_complete_comm_assembly TYPE REF TO data.
+
+    FIELD-SYMBOLS: <lg_complete_comm_assembly> TYPE any,
+                   <lv_user>                   TYPE any.
+
+    lv_id = ms_item-obj_name.
+
+    TRY.
+        CREATE DATA lr_complete_comm_assembly TYPE ('UCONSERVASCOMPLETE').
+        ASSIGN lr_complete_comm_assembly->* TO <lg_complete_comm_assembly>.
+        ASSERT sy-subrc = 0.
+
+        lo_persistence = get_persistence( lv_id ).
+
+        CALL METHOD lo_persistence->('IF_UCON_SA_PERSIST~LOAD')
+          EXPORTING
+            version  = c_version-active
+            language = mv_language
+          IMPORTING
+            sa       = <lg_complete_comm_assembly>.
+
+        ASSIGN COMPONENT 'CHANGEDBY' OF STRUCTURE <lg_complete_comm_assembly> TO <lv_user>.
+        IF sy-subrc = 0.
+          rv_user = <lv_user>.
+        ENDIF.
+
+      CATCH cx_root INTO lx_root.
+        zcx_abapgit_exception=>raise_with_text( lx_root ).
+    ENDTRY.
 
   ENDMETHOD.
 
@@ -124,6 +155,8 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
         lv_text = lx_root->get_text( ).
         zcx_abapgit_exception=>raise( lv_text ).
     ENDTRY.
+
+    tadir_delete( ).
 
   ENDMETHOD.
 
@@ -181,13 +214,13 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
         lo_persistence = get_persistence( lv_id ).
 
         " Interface IF_UCON_SA_PERSIST and other objects are not present
-        " in lower Netweaver realeses. Therefore we have to call them
-        " dynamically to be downward comapatible.
+        " in lower NetWeaver releases. Therefore we have to call them
+        " dynamically to be downward compatible.
 
         CALL METHOD lo_persistence->('IF_UCON_SA_PERSIST~LOAD')
           EXPORTING
             version  = c_version-active
-            language = sy-langu.
+            language = mv_language.
 
       CATCH cx_root.
         rv_bool = abap_false.
@@ -204,16 +237,18 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_metadata.
-
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
-
   ENDMETHOD.
 
 
@@ -228,22 +263,17 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation           = 'SHOW'
-        object_name         = ms_item-obj_name
-        object_type         = ms_item-obj_type
-        in_new_window       = abap_true
-      EXCEPTIONS
-        not_executed        = 1
-        invalid_object_type = 2
-        OTHERS              = 3.
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from RS_TOOL_ACCESS' ).
-    ENDIF.
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
 
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -251,7 +281,6 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
 
     DATA: lv_id                     TYPE ty_id,
           lx_root                   TYPE REF TO cx_root,
-          lv_text                   TYPE string,
           lo_persistence            TYPE REF TO object,
           lr_complete_comm_assembly TYPE REF TO data.
 
@@ -270,7 +299,7 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
         CALL METHOD lo_persistence->('IF_UCON_SA_PERSIST~LOAD')
           EXPORTING
             version  = c_version-active
-            language = sy-langu
+            language = mv_language
           IMPORTING
             sa       = <lg_complete_comm_assembly>.
 
@@ -280,8 +309,7 @@ CLASS ZCL_ABAPGIT_OBJECT_UCSA IMPLEMENTATION.
                      ig_data = <lg_complete_comm_assembly> ).
 
       CATCH cx_root INTO lx_root.
-        lv_text = lx_root->get_text( ).
-        zcx_abapgit_exception=>raise( lv_text ).
+        zcx_abapgit_exception=>raise_with_text( lx_root ).
     ENDTRY.
 
   ENDMETHOD.

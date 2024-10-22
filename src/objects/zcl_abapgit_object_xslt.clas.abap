@@ -2,8 +2,6 @@ CLASS zcl_abapgit_object_xslt DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     METHODS:
@@ -15,7 +13,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
+CLASS zcl_abapgit_object_xslt IMPLEMENTATION.
 
 
   METHOD get.
@@ -101,9 +99,18 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
           lv_len        TYPE i,
           ls_attributes TYPE o2xsltattr.
 
+    " Transformation might depend on other objects like a class
+    " We attempt to activate it in late step
+    IF iv_step = zif_abapgit_object=>gc_step_id-late.
+      IF zif_abapgit_object~is_active( ) = abap_false.
+        zcl_abapgit_objects_activation=>add_item( ms_item ).
+      ENDIF.
+      RETURN.
+    ENDIF.
 
     IF zif_abapgit_object~exists( ) = abap_true.
-      zif_abapgit_object~delete( ).
+      zif_abapgit_object~delete( iv_package   = iv_package
+                                 iv_transport = iv_transport ).
     ENDIF.
 
     io_xml->read( EXPORTING iv_name = 'ATTRIBUTES'
@@ -111,8 +118,11 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
 
     ls_attributes-devclass = iv_package.
 
-    lv_source = mo_files->read_string( iv_extra = 'source'
-                                       iv_ext   = 'xml' ) ##NO_TEXT.
+    lv_source = mo_files->read_string(
+      iv_extra = 'source'
+      iv_ext   = 'xml' ).
+
+    zcl_abapgit_utils=>check_eol( lv_source ).
 
 * workaround: somewhere additional linefeeds are added
     lv_len = strlen( lv_source ) - 2.
@@ -134,12 +144,21 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
         undefined_name          = 5
         OTHERS                  = 6 ).
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |error from cl_o2_api_xsltdesc=>create_new_from_string, { sy-subrc }| ).
+      zcx_abapgit_exception=>raise( |Error from XSLT new, { sy-subrc }| ).
     ENDIF.
 
-    lo_xslt->activate( ).
-
-    lo_xslt->save( ).
+    lo_xslt->save(
+      EXCEPTIONS
+        action_cancelled      = 1
+        error_occured         = 2
+        object_invalid        = 3
+        object_not_changeable = 4
+        permission_failure    = 5
+        OTHERS                = 6 ).
+    IF sy-subrc <> 0.
+      lo_xslt->set_changeable( abap_false ). " unlock
+      zcx_abapgit_exception=>raise( |Error from XSLT save, { sy-subrc }| ).
+    ENDIF.
 
     lo_xslt->set_changeable( abap_false ).
 
@@ -155,11 +174,7 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
     lv_name = ms_item-obj_name.
 
     rv_bool = cl_o2_api_xsltdesc=>exists( lv_name ).
-    IF rv_bool = '1'.
-      rv_bool = abap_true.
-    ELSE.
-      rv_bool = abap_false.
-    ENDIF.
+    rv_bool = boolc( rv_bool = '1' ).
 
   ENDMETHOD.
 
@@ -169,8 +184,14 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
+    APPEND zif_abapgit_object=>gc_step_id-late TO rt_steps.
   ENDMETHOD.
 
 
@@ -190,13 +211,17 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation   = 'SHOW'
-        object_name = ms_item-obj_name
-        object_type = ms_item-obj_type.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -222,9 +247,10 @@ CLASS ZCL_ABAPGIT_OBJECT_XSLT IMPLEMENTATION.
 
     lv_source = lo_xslt->get_source_string( ).
 
-    mo_files->add_string( iv_extra  = 'source'
-                          iv_ext    = 'xml'
-                          iv_string = lv_source ) ##NO_TEXT.
+    mo_files->add_string(
+      iv_extra  = 'source'
+      iv_ext    = 'xml'
+      iv_string = lv_source ).
 
   ENDMETHOD.
 ENDCLASS.

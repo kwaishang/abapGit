@@ -1,8 +1,6 @@
 CLASS zcl_abapgit_object_ensc DEFINITION PUBLIC INHERITING FROM zcl_abapgit_objects_super FINAL.
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
 ENDCLASS.
@@ -13,7 +11,26 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown. " todo
+
+    DATA: lv_spot_name TYPE enhspotcompositename,
+          li_spot_ref  TYPE REF TO if_enh_spot_composite,
+          lo_spot_ref  TYPE REF TO cl_enh_spot_composite.
+
+    lv_spot_name = ms_item-obj_name.
+
+    TRY.
+        li_spot_ref = cl_enh_factory=>get_enhancement_spot_comp(
+          lock     = ''
+          run_dark = abap_true
+          name     = lv_spot_name ).
+
+        lo_spot_ref ?= li_spot_ref.
+
+        lo_spot_ref->if_enh_spot_composite~get_change_attributes( IMPORTING changedby = rv_user ).
+      CATCH cx_root.
+        rv_user = c_user_unknown.
+    ENDTRY.
+
   ENDMETHOD.
 
 
@@ -27,18 +44,19 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
 
     TRY.
         li_spot_ref = cl_enh_factory=>get_enhancement_spot_comp(
-          lock = 'X'
-          name = lv_spot_name ).
+          lock     = abap_true
+          run_dark = abap_true
+          name     = lv_spot_name ).
 
         IF li_spot_ref IS BOUND.
           li_spot_ref->if_enh_object~delete(
-            nevertheless_delete = 'X'
-            run_dark            = 'X' ).
+            nevertheless_delete = abap_true
+            run_dark            = abap_true ).
         ENDIF.
         li_spot_ref->if_enh_object~unlock( ).
       CATCH cx_enh_root INTO lx_root.
-        lv_message = `Error occured while deleting ENSC: `
-          && lx_root->get_text( ) ##NO_TEXT.
+        lv_message = `Error occurred while deleting ENSC: `
+          && lx_root->get_text( ).
         zcx_abapgit_exception=>raise( lv_message ).
     ENDTRY.
 
@@ -69,7 +87,8 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
                   CHANGING  cg_data = lt_comp_spots ).
 
     IF zif_abapgit_object~exists( ) = abap_true.
-      zif_abapgit_object~delete( ).
+      zif_abapgit_object~delete( iv_package   = iv_package
+                                 iv_transport = iv_transport ).
     ENDIF.
 
     lv_package = iv_package.
@@ -100,9 +119,13 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
         lo_spot_ref->if_enh_object~activate( ).
         lo_spot_ref->if_enh_object~unlock( ).
 
+        zcl_abapgit_sotr_handler=>create_sotr(
+          iv_package = iv_package
+          io_xml     = io_xml ).
+
       CATCH cx_enh_root INTO lx_root.
-        lv_message = `Error occured while deserializing ENSC: `
-          && lx_root->get_text( ) ##NO_TEXT.
+        lv_message = `Error occurred while deserializing ENSC: `
+          && lx_root->get_text( ).
         zcx_abapgit_exception=>raise( lv_message ).
     ENDTRY.
 
@@ -118,8 +141,9 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
 
     TRY.
         cl_enh_factory=>get_enhancement_spot_comp(
-          lock = ''
-          name = lv_spot_name ).
+          lock     = ''
+          run_dark = abap_true
+          name     = lv_spot_name ).
         rv_bool = abap_true.
       CATCH cx_enh_root.
         rv_bool = abap_false.
@@ -129,6 +153,11 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -156,14 +185,17 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = 'ENSC'
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -183,8 +215,9 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
 
     TRY.
         li_spot_ref = cl_enh_factory=>get_enhancement_spot_comp(
-          lock = ''
-          name = lv_spot_name ).
+          lock     = ''
+          run_dark = abap_true
+          name     = lv_spot_name ).
 
         lo_spot_ref ?= li_spot_ref.
 
@@ -201,9 +234,16 @@ CLASS ZCL_ABAPGIT_OBJECT_ENSC IMPLEMENTATION.
         io_xml->add( ig_data = lt_comp_spots
                      iv_name = 'COMP_ENH_SPOTS' ).    "Composite enhancement spots
 
+        zcl_abapgit_sotr_handler=>read_sotr(
+          iv_pgmid    = 'R3TR'
+          iv_object   = ms_item-obj_type
+          iv_obj_name = ms_item-obj_name
+          io_i18n_params = mo_i18n_params
+          io_xml      = io_xml ).
+
       CATCH cx_enh_root INTO lx_root.
-        lv_message = `Error occured while serializing ENSC: `
-          && lx_root->get_text( ) ##NO_TEXT.
+        lv_message = `Error occurred while serializing ENSC: `
+          && lx_root->get_text( ).
         zcx_abapgit_exception=>raise( lv_message ).
     ENDTRY.
 

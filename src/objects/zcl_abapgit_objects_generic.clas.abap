@@ -6,16 +6,20 @@ CLASS zcl_abapgit_objects_generic DEFINITION
 
     METHODS constructor
       IMPORTING
-        !is_item TYPE zif_abapgit_definitions=>ty_item
+        !is_item       TYPE zif_abapgit_definitions=>ty_item
+        !iv_language   TYPE spras DEFAULT sy-langu
+        io_field_rules TYPE REF TO zif_abapgit_field_rules OPTIONAL
       RAISING
         zcx_abapgit_exception .
     METHODS delete
+      IMPORTING
+        !iv_package TYPE devclass
       RAISING
         zcx_abapgit_exception .
     METHODS deserialize
       IMPORTING
         !iv_package TYPE devclass
-        !io_xml     TYPE REF TO zcl_abapgit_xml_input
+        !io_xml     TYPE REF TO zif_abapgit_xml_input
       RAISING
         zcx_abapgit_exception .
     METHODS exists
@@ -25,25 +29,26 @@ CLASS zcl_abapgit_objects_generic DEFINITION
         zcx_abapgit_exception .
     METHODS serialize
       IMPORTING
-        !io_xml TYPE REF TO zcl_abapgit_xml_output
+        !io_xml TYPE REF TO zif_abapgit_xml_output
       RAISING
         zcx_abapgit_exception .
   PROTECTED SECTION.
 
     TYPES:
       BEGIN OF ty_s_objkey,
-        num   TYPE numc3,
-        value TYPE char128,
+        num   TYPE n LENGTH 3,
+        value TYPE c LENGTH 128,
       END OF ty_s_objkey .
     TYPES:
       ty_t_objkey TYPE SORTED TABLE OF ty_s_objkey WITH UNIQUE KEY num .
 
     DATA ms_object_header TYPE objh .
     DATA:
-      mt_object_table                TYPE STANDARD TABLE OF objsl WITH DEFAULT KEY .
+      mt_object_table TYPE STANDARD TABLE OF objsl WITH DEFAULT KEY .
     DATA:
-      mt_object_method               TYPE STANDARD TABLE OF objm WITH DEFAULT KEY .
+      mt_object_method TYPE STANDARD TABLE OF objm WITH DEFAULT KEY .
     DATA ms_item TYPE zif_abapgit_definitions=>ty_item .
+    DATA mv_language TYPE spras .
 
     METHODS after_import .
     METHODS before_export .
@@ -54,7 +59,8 @@ CLASS zcl_abapgit_objects_generic DEFINITION
         zcx_abapgit_exception .
     METHODS deserialize_data
       IMPORTING
-        !io_xml TYPE REF TO zcl_abapgit_xml_input
+        !io_xml     TYPE REF TO zif_abapgit_xml_input
+        !iv_package TYPE devclass
       RAISING
         zcx_abapgit_exception .
     METHODS distribute_name_to_components
@@ -85,7 +91,7 @@ CLASS zcl_abapgit_objects_generic DEFINITION
         zcx_abapgit_exception .
     METHODS serialize_data
       IMPORTING
-        !io_xml TYPE REF TO zcl_abapgit_xml_output
+        !io_xml TYPE REF TO zif_abapgit_xml_output
       RAISING
         zcx_abapgit_exception .
     METHODS split_value_to_keys
@@ -97,15 +103,29 @@ CLASS zcl_abapgit_objects_generic DEFINITION
         !cv_non_value_pos TYPE numc3 .
     METHODS validate
       IMPORTING
-        !io_xml TYPE REF TO zcl_abapgit_xml_input
+        !io_xml TYPE REF TO zif_abapgit_xml_input
       RAISING
         zcx_abapgit_exception .
   PRIVATE SECTION.
+
+    DATA mo_field_rules TYPE REF TO zif_abapgit_field_rules .
+
+    METHODS apply_clear_logic
+      IMPORTING
+        !iv_table TYPE objsl-tobj_name
+      CHANGING
+        !ct_data  TYPE STANDARD TABLE .
+    METHODS apply_fill_logic
+      IMPORTING
+        !iv_table   TYPE objsl-tobj_name
+        !iv_package TYPE devclass
+      CHANGING
+        !ct_data    TYPE STANDARD TABLE .
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
+CLASS zcl_abapgit_objects_generic IMPLEMENTATION.
 
 
   METHOD after_import.
@@ -117,7 +137,7 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
     FIELD-SYMBOLS <ls_object_method> LIKE LINE OF mt_object_method.
 
 
-    ls_cts_object_entry-pgmid    = seok_pgmid_r3tr.
+    ls_cts_object_entry-pgmid    = 'R3TR'.
     ls_cts_object_entry-object   = ms_item-obj_type.
     ls_cts_object_entry-obj_name = ms_item-obj_name.
     INSERT ls_cts_object_entry INTO TABLE lt_cts_object_entry.
@@ -142,6 +162,26 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD apply_clear_logic.
+    IF mo_field_rules IS BOUND.
+      mo_field_rules->apply_clear_logic( EXPORTING iv_table = |{ iv_table }|
+                                         CHANGING  ct_data  = ct_data ).
+    ENDIF.
+  ENDMETHOD.
+
+
+  METHOD apply_fill_logic.
+    IF mo_field_rules IS BOUND.
+      mo_field_rules->apply_fill_logic(
+        EXPORTING
+          iv_table   = |{ iv_table }|
+          iv_package = iv_package
+        CHANGING
+          ct_data    = ct_data ).
+    ENDIF.
+  ENDMETHOD.
+
+
   METHOD before_export.
 
     DATA: lt_cts_object_entry TYPE STANDARD TABLE OF e071 WITH DEFAULT KEY,
@@ -156,11 +196,11 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
       WITH KEY
         objectname = ms_item-obj_type
         objecttype = 'L'
-        method     = 'BEFORE_EXP' ##no_text.
+        method     = 'BEFORE_EXP'.
     IF sy-subrc = 0.
       lv_client = sy-mandt.
 
-      ls_cts_object_entry-pgmid    = seok_pgmid_r3tr.
+      ls_cts_object_entry-pgmid    = 'R3TR'.
       ls_cts_object_entry-object   = ms_item-obj_type.
       ls_cts_object_entry-obj_name = ms_item-obj_name.
       INSERT ls_cts_object_entry INTO TABLE lt_cts_object_entry.
@@ -188,27 +228,30 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
       zcx_abapgit_exception=>raise( 'Not found in OBJH, or not supported' ).
     ENDIF.
 
-* object tables
+    " object tables
     SELECT * FROM objsl INTO CORRESPONDING FIELDS OF TABLE mt_object_table
       WHERE objectname = is_item-obj_type
       AND objecttype = lc_logical_transport_object
       AND tobject = 'TABU'
       ORDER BY PRIMARY KEY.
     IF mt_object_table IS INITIAL.
-      zcx_abapgit_exception=>raise( |Obviously corrupted object-type {
-        is_item-obj_type }: No tables defined| ).
+      zcx_abapgit_exception=>raise( |Obviously corrupted object-type { is_item-obj_type }: No tables defined| ).
     ENDIF.
-* only unique tables
-    SORT mt_object_table BY tobj_name ASCENDING.
-    DELETE ADJACENT DUPLICATES FROM mt_object_table COMPARING tobj_name.
 
-* object methods
+    " remove duplicate table/table-key entries
+    " same table with different keys is ok
+    SORT mt_object_table BY tobj_name tobjkey.
+    DELETE ADJACENT DUPLICATES FROM mt_object_table COMPARING tobj_name tobjkey.
+
+    " object methods
     SELECT * FROM objm INTO TABLE mt_object_method
       WHERE objectname = is_item-obj_type
-      AND   objecttype = lc_logical_transport_object
+      AND objecttype = lc_logical_transport_object
       ORDER BY PRIMARY KEY.
 
     ms_item = is_item.
+    mv_language = iv_language.
+    mo_field_rules = io_field_rules.
 
   ENDMETHOD.
 
@@ -216,23 +259,11 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
   METHOD corr_insert.
 
 * this will also insert into TADIR
-    CALL FUNCTION 'RS_CORR_INSERT'
-      EXPORTING
-        object              = ms_item-obj_name
-        object_class        = ms_item-obj_type
-        mode                = 'I'
-        global_lock         = abap_true
-        devclass            = iv_package
-        master_language     = sy-langu
-        suppress_dialog     = abap_true
-      EXCEPTIONS
-        cancelled           = 1
-        permission_failure  = 2
-        unknown_objectclass = 3
-        OTHERS              = 4.
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from RS_CORR_INSERT, CMPT' ).
-    ENDIF.
+    zcl_abapgit_factory=>get_cts_api( )->insert_transport_object(
+      iv_object   = ms_item-obj_type
+      iv_obj_name = ms_item-obj_name
+      iv_package  = iv_package
+      iv_language = mv_language ).
 
   ENDMETHOD.
 
@@ -258,6 +289,8 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
+    corr_insert( iv_package ).
+
   ENDMETHOD.
 
 
@@ -265,9 +298,11 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
 
     validate( io_xml ).
 
-    delete( ).
+    delete( iv_package ).
 
-    deserialize_data( io_xml ).
+    deserialize_data(
+      io_xml     = io_xml
+      iv_package = iv_package ).
 
     after_import( ).
 
@@ -294,11 +329,16 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
           iv_name = <ls_table>-tobj_name
         CHANGING
           cg_data = <lt_data> ).
+      apply_fill_logic(
+        EXPORTING
+          iv_table   = <ls_table>-tobj_name
+          iv_package = iv_package
+        CHANGING
+          ct_data    = <lt_data> ).
 
       INSERT (<ls_table>-tobj_name) FROM TABLE <lt_data>.
       IF sy-subrc <> 0.
-        zcx_abapgit_exception=>raise( |Error inserting data, {
-          <ls_table>-tobj_name }| ).
+        zcx_abapgit_exception=>raise( |Error inserting data, { <ls_table>-tobj_name }| ).
       ENDIF.
 
     ENDLOOP.
@@ -322,7 +362,7 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
     ls_objkey_sub-num = cs_objkey-num.
     lv_objkey_sub_pos = 0.
 
-*    we want to fill the atribute values which are not covered by explicit key components yet
+*    we want to fill the attribute values which are not covered by explicit key components yet
     lv_count_components_covered = ls_objkey_sub-num - 1.
     DO lv_count_components_covered TIMES.
       DELETE lt_key_component_uncovered INDEX 1.
@@ -333,7 +373,8 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
 
 *      Some datatype used in the key might exceed the total remaining characters length (e. g. SICF)
       TRY.
-          lv_remaining_length = strlen( |{ substring( val = cs_objkey-value off = lv_objkey_sub_pos ) }| ).
+          lv_remaining_length = strlen( |{ substring( val = cs_objkey-value
+                                                      off = lv_objkey_sub_pos ) }| ).
         CATCH cx_sy_range_out_of_bounds.
           lv_remaining_length = 0.
           RETURN. ">>>>>>>>>>>>>>>>>>>>>>>>>>>
@@ -344,7 +385,9 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
         lv_len = lv_remaining_length.
       ENDIF.
 
-      ls_objkey_sub-value = |{ substring( val = cs_objkey-value off = lv_objkey_sub_pos len = lv_len ) }|.
+      ls_objkey_sub-value = |{ substring( val = cs_objkey-value
+                                          off = lv_objkey_sub_pos
+                                          len = lv_len ) }|.
       ls_objkey_sub-num = cv_non_value_pos.
 
       INSERT ls_objkey_sub INTO TABLE ct_objkey.
@@ -411,13 +454,18 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
   METHOD get_primary_table.
 
     DATA: ls_object_table LIKE LINE OF mt_object_table.
+    DATA: lt_object_table LIKE mt_object_table.
 
+    " There might be several tables marked as "primary"
+    " Sort by DB key so we get first one in the list
+    lt_object_table = mt_object_table.
+    SORT lt_object_table.
 
-    READ TABLE mt_object_table INTO ls_object_table WITH KEY prim_table = abap_true.
+    READ TABLE lt_object_table INTO ls_object_table WITH KEY prim_table = abap_true.
     IF sy-subrc <> 0.
-*    Fallback. For some objects, no primary table is explicitly flagged
-*    The, the one with only one key field shall be chosen
-      READ TABLE mt_object_table INTO ls_object_table WITH KEY tobjkey = '/&'. "#EC CI_SUBRC
+      " Fallback. For some objects, no primary table is explicitly flagged
+      " Then, the one with only one key field shall be chosen
+      READ TABLE lt_object_table INTO ls_object_table WITH KEY tobjkey = '/&'. "#EC CI_SUBRC
     ENDIF.
     IF ls_object_table IS INITIAL.
       zcx_abapgit_exception=>raise( |Object { ms_item-obj_type } has got no defined primary table| ).
@@ -489,7 +537,6 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
           lv_objkey_pos = lv_objkey_pos + 1.
 *       object name
         ELSEIF <ls_object_table>-tobjkey+lv_next_objkey_pos(1) = '&'.
-          "TODO
           ls_objkey-value = ms_item-obj_name.
 *    The object name might comprise multiple key components (e. g. WDCC)
 *    This string needs to be split
@@ -504,7 +551,7 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
           lv_objkey_pos = lv_objkey_pos + 1.
 *       language
         ELSEIF <ls_object_table>-tobjkey+lv_next_objkey_pos(1) = 'L'.
-          ls_objkey-value = sy-langu.
+          ls_objkey-value = mv_language.
           INSERT ls_objkey INTO TABLE lt_objkey.
           CLEAR ls_objkey.
           lv_non_value_pos = lv_non_value_pos + 1.
@@ -601,6 +648,9 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
         WHERE (lv_where)
         ORDER BY PRIMARY KEY.
 
+      apply_clear_logic( EXPORTING iv_table = <ls_object_table>-tobj_name
+                         CHANGING  ct_data  = <lt_data> ).
+
       io_xml->add(
         iv_name = <ls_object_table>-tobj_name
         ig_data = <lt_data> ).
@@ -621,7 +671,7 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
 
     lt_key_component_uncovered = it_key_component.
 
-*    we want to fill the atribute values which are not covered by explicit key components yet
+*    we want to fill the attribute values which are not covered by explicit key components yet
     LOOP AT ct_objkey INTO ls_dummy.
       DELETE lt_key_component_uncovered INDEX 1.
     ENDLOOP.
@@ -669,11 +719,9 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
         cg_data = <lt_data> ).
 
     IF lines( <lt_data> ) = 0.
-      zcx_abapgit_exception=>raise( |Primary table { lv_primary
-        } not found in imported container | ).
+      zcx_abapgit_exception=>raise( |Primary table { lv_primary } not found in imported container| ).
     ELSEIF lines( <lt_data> ) <> 1.
-      zcx_abapgit_exception=>raise( |Primary table { lv_primary
-        } contains more than one instance! | ).
+      zcx_abapgit_exception=>raise( |Primary table { lv_primary } contains more than one instance!| ).
     ENDIF.
 
     lv_where = get_where_clause( lv_primary ).
@@ -681,8 +729,7 @@ CLASS ZCL_ABAPGIT_OBJECTS_GENERIC IMPLEMENTATION.
 *  validate that max one local instance was affected by the import
     SELECT COUNT(*) FROM (lv_primary) WHERE (lv_where).
     IF sy-dbcnt > 1.
-      zcx_abapgit_exception=>raise( |More than one instance exists locally in primary table {
-        lv_primary }| ).
+      zcx_abapgit_exception=>raise( |More than one instance exists locally in primary table { lv_primary }| ).
     ENDIF.
 
   ENDMETHOD.

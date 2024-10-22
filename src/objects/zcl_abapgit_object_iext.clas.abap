@@ -2,12 +2,16 @@ CLASS zcl_abapgit_object_iext DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-    METHODS:
-      constructor
-        IMPORTING
-          is_item     TYPE zif_abapgit_definitions=>ty_item
-          iv_language TYPE spras.
+
+    METHODS constructor
+      IMPORTING
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
+
   PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_extention,
@@ -22,13 +26,16 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_IEXT IMPLEMENTATION.
+CLASS zcl_abapgit_object_iext IMPLEMENTATION.
 
 
   METHOD constructor.
 
-    super->constructor( is_item     = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     mv_extension = ms_item-obj_name.
 
@@ -76,10 +83,10 @@ CLASS ZCL_ABAPGIT_OBJECT_IEXT IMPLEMENTATION.
                   CHANGING  cg_data = ls_extension ).
 
     MOVE-CORRESPONDING ls_extension-attributes TO ls_attributes.
-    ls_attributes-presp = cl_abap_syst=>get_user_name( ).
+    ls_attributes-presp = sy-uname.
     ls_attributes-pwork = ls_attributes-presp.
 
-    IF me->zif_abapgit_object~exists( ) = abap_true.
+    IF zif_abapgit_object~exists( ) = abap_true.
       CALL FUNCTION 'EXTTYPE_UPDATE'
         EXPORTING
           pi_cimtyp     = mv_extension
@@ -121,6 +128,11 @@ CLASS ZCL_ABAPGIT_OBJECT_IEXT IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -168,20 +180,22 @@ CLASS ZCL_ABAPGIT_OBJECT_IEXT IMPLEMENTATION.
     <ls_bdcdata>-fnam = 'BDC_OKCODE'.
     <ls_bdcdata>-fval = '=DISP'.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'WE30'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bdcdata
-      EXCEPTIONS
-        OTHERS    = 1.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'WE30'
+      it_bdcdata = lt_bdcdata ).
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise_t100( ).
-    ENDIF.
+    rv_exit = abap_true.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -203,7 +217,7 @@ CLASS ZCL_ABAPGIT_OBJECT_IEXT IMPLEMENTATION.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
-    zcl_abapgit_object_idoc=>clear_idoc_segement_fields( CHANGING cs_structure = ls_extension-attributes ).
+    zcl_abapgit_object_idoc=>clear_idoc_segement_fields( CHANGING cg_structure = ls_extension-attributes ).
 
     io_xml->add( iv_name = c_dataname_iext
                  ig_data = ls_extension ).

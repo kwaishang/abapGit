@@ -1,45 +1,91 @@
-CLASS zcl_abapgit_object_docv DEFINITION PUBLIC INHERITING FROM zcl_abapgit_objects_super FINAL.
+CLASS zcl_abapgit_object_docv DEFINITION
+  PUBLIC
+  INHERITING FROM zcl_abapgit_objects_super
+  FINAL
+  CREATE PUBLIC.
 
   PUBLIC SECTION.
+
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
+
+    METHODS constructor
+      IMPORTING
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
-    CONSTANTS: c_typ     TYPE dokhl-typ VALUE 'E',
-               c_version TYPE dokhl-dokversion VALUE '0001',
-               c_name    TYPE string VALUE 'DOC'.
 
-    TYPES: BEGIN OF ty_data,
-             doctitle TYPE dsyst-doktitle,
-             head     TYPE thead,
-             lines    TYPE tline_tab,
-           END OF ty_data.
+    TYPES:
+      BEGIN OF ty_data,
+        doctitle TYPE dsyst-doktitle,
+        head     TYPE thead,
+        lines    TYPE tline_tab,
+      END OF ty_data.
 
-    METHODS: read
-      RETURNING VALUE(rs_data) TYPE ty_data.
+    CONSTANTS c_typ TYPE dokhl-typ VALUE 'E' ##NO_TEXT.
+    CONSTANTS c_version TYPE dokhl-dokversion VALUE '0001' ##NO_TEXT.
+    CONSTANTS c_name TYPE string VALUE 'DOC' ##NO_TEXT.
 
+    DATA mv_id TYPE dokhl-id.
+    DATA mv_doc_object TYPE dokhl-object.
+
+    METHODS read
+      RETURNING
+        VALUE(rs_data) TYPE ty_data.
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_DOCV IMPLEMENTATION.
+CLASS zcl_abapgit_object_docv IMPLEMENTATION.
+
+
+  METHOD constructor.
+
+    DATA: lv_prefix    TYPE namespace,
+          lv_bare_name TYPE progname.
+
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
+
+    IF ms_item-obj_name(2) <> 'DT'. " IN, MO, UO, UP
+      mv_id         = ms_item-obj_name(2).
+      mv_doc_object = ms_item-obj_name+2.
+    ELSE. " DT
+      CALL FUNCTION 'RS_NAME_SPLIT_NAMESPACE'
+        EXPORTING
+          name_with_namespace    = ms_item-obj_name
+        IMPORTING
+          namespace              = lv_prefix
+          name_without_namespace = lv_bare_name
+        EXCEPTIONS
+          delimiter_error        = 1
+          OTHERS                 = 2.
+      IF sy-subrc <> 0.
+        zcx_abapgit_exception=>raise( |Error determining namespace for { ms_item-obj_type } { ms_item-obj_name }| ).
+      ENDIF.
+
+      mv_id         = lv_bare_name(2).
+      mv_doc_object = |{ lv_prefix }{ lv_bare_name+2 }|.
+    ENDIF.
+
+  ENDMETHOD.
 
 
   METHOD read.
 
-    DATA: lv_object TYPE dokhl-object,
-          lv_id     TYPE dokhl-id.
-
-
-    lv_id = ms_item-obj_name(2).
-    lv_object = ms_item-obj_name+2.
-
     CALL FUNCTION 'DOCU_READ'
       EXPORTING
-        id       = lv_id
+        id       = mv_id
         langu    = mv_language
-        object   = lv_object
+        object   = mv_doc_object
         typ      = c_typ
         version  = c_version
       IMPORTING
@@ -61,25 +107,20 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCV IMPLEMENTATION.
 
   METHOD zif_abapgit_object~delete.
 
-    DATA: lv_id     TYPE dokhl-id,
-          lv_object TYPE dokhl-object.
-
-
-    lv_id = ms_item-obj_name(2).
-    lv_object = ms_item-obj_name+2.
-
     CALL FUNCTION 'DOCU_DEL'
       EXPORTING
-        id       = lv_id
+        id       = mv_id
         langu    = mv_language
-        object   = lv_object
+        object   = mv_doc_object
         typ      = c_typ
       EXCEPTIONS
         ret_code = 1
         OTHERS   = 2.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from DOCU_DEL' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
+
+    corr_insert( iv_package ).
 
   ENDMETHOD.
 
@@ -101,21 +142,18 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCV IMPLEMENTATION.
       TABLES
         line    = ls_data-lines.
 
+    tadir_insert( iv_package ).
+
+    corr_insert( iv_package ).
+
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~exists.
 
-    DATA: lv_id     TYPE dokhl-id,
-          lv_object TYPE dokhl-object.
-
-
-    lv_id = ms_item-obj_name(2).
-    lv_object = ms_item-obj_name+2.
-
-    SELECT SINGLE id FROM dokil INTO lv_id
-      WHERE id     = lv_id
-        AND object = lv_object.                         "#EC CI_GENBUFF
+    SELECT SINGLE id FROM dokil INTO mv_id
+       WHERE id     = mv_id
+         AND object = mv_doc_object.    "#EC CI_GENBUFF "#EC CI_NOORDER
 
     rv_bool = boolc( sy-subrc = 0 ).
 
@@ -127,6 +165,11 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCV IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -134,7 +177,6 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCV IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -149,9 +191,16 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCV IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+  ENDMETHOD.
 
-    zcx_abapgit_exception=>raise( 'todo, jump DOCV' ).
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 

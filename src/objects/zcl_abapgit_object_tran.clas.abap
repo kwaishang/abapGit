@@ -1,36 +1,51 @@
-CLASS zcl_abapgit_object_tran DEFINITION PUBLIC INHERITING FROM zcl_abapgit_objects_super FINAL.
+CLASS zcl_abapgit_object_tran DEFINITION
+  PUBLIC
+  INHERITING FROM zcl_abapgit_objects_super
+  FINAL
+  CREATE PUBLIC .
 
   PUBLIC SECTION.
-    INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
+    INTERFACES zif_abapgit_object .
   PROTECTED SECTION.
+
   PRIVATE SECTION.
-
     TYPES:
-      tty_param_values TYPE STANDARD TABLE OF rsparam
-                                     WITH NON-UNIQUE DEFAULT KEY .
+      ty_param_values TYPE STANDARD TABLE OF rsparam
+                                     WITH NON-UNIQUE DEFAULT KEY ,
+      ty_tstca        TYPE STANDARD TABLE OF tstca
+                                     WITH DEFAULT KEY.
 
     CONSTANTS:
-      c_oo_program(9) VALUE '\PROGRAM=' ##NO_TEXT.
-    CONSTANTS:
-      c_oo_class(7) VALUE '\CLASS=' ##NO_TEXT.
-    CONSTANTS:
-      c_oo_method(8) VALUE '\METHOD=' ##NO_TEXT.
-    CONSTANTS c_oo_tcode TYPE tcode VALUE 'OS_APPLICATION' ##NO_TEXT.
-    CONSTANTS:
-      c_oo_frclass(30) VALUE 'CLASS' ##NO_TEXT.
-    CONSTANTS:
-      c_oo_frmethod(30) VALUE 'METHOD' ##NO_TEXT.
-    CONSTANTS:
-      c_oo_frupdtask(30) VALUE 'UPDATE_MODE' ##NO_TEXT.
-    CONSTANTS c_oo_synchron TYPE c VALUE 'S' ##NO_TEXT.
-    CONSTANTS c_oo_asynchron TYPE c VALUE 'U' ##NO_TEXT.
-    CONSTANTS c_true TYPE c VALUE 'X' ##NO_TEXT.
-    CONSTANTS c_false TYPE c VALUE space ##NO_TEXT.
+      c_oo_program   TYPE c LENGTH 9 VALUE '\PROGRAM=' ##NO_TEXT,
+      c_oo_class     TYPE c LENGTH 7 VALUE '\CLASS=' ##NO_TEXT,
+      c_oo_method    TYPE c LENGTH 8 VALUE '\METHOD=' ##NO_TEXT,
+      c_oo_tcode     TYPE tcode VALUE 'OS_APPLICATION' ##NO_TEXT,
+      c_oo_frclass   TYPE c LENGTH 30 VALUE 'CLASS' ##NO_TEXT,
+      c_oo_frmethod  TYPE c LENGTH 30 VALUE 'METHOD' ##NO_TEXT,
+      c_oo_frupdtask TYPE c LENGTH 30 VALUE 'UPDATE_MODE' ##NO_TEXT,
+      c_oo_synchron  TYPE c VALUE 'S' ##NO_TEXT,
+      c_oo_asynchron TYPE c VALUE 'U' ##NO_TEXT,
+      c_true         TYPE c VALUE 'X' ##NO_TEXT,
+      c_false        TYPE c VALUE space ##NO_TEXT,
+      BEGIN OF c_variant_type,
+        dialog     TYPE rglif-docutype VALUE 'D' ##NO_TEXT,
+        report     TYPE rglif-docutype VALUE 'R' ##NO_TEXT,
+        variant    TYPE rglif-docutype VALUE 'V' ##NO_TEXT,
+        parameters TYPE rglif-docutype VALUE 'P' ##NO_TEXT,
+        object     TYPE rglif-docutype VALUE 'O' ##NO_TEXT,
+      END OF c_variant_type.
+
     DATA:
       mt_bcdata TYPE STANDARD TABLE OF bdcdata .
 
+    METHODS transaction_read
+      IMPORTING
+        iv_transaction TYPE tcode
+      EXPORTING
+        es_transaction TYPE tstc
+        es_gui_attr    TYPE tstcc
+      RAISING
+        zcx_abapgit_exception.
     METHODS shift_param
       CHANGING
         !ct_rsparam TYPE s_param
@@ -61,12 +76,12 @@ CLASS zcl_abapgit_object_tran DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
         !cg_value TYPE any .
     METHODS serialize_texts
       IMPORTING
-        !io_xml TYPE REF TO zcl_abapgit_xml_output
+        !ii_xml TYPE REF TO zif_abapgit_xml_output
       RAISING
         zcx_abapgit_exception .
     METHODS deserialize_texts
       IMPORTING
-        !io_xml TYPE REF TO zcl_abapgit_xml_input
+        !ii_xml TYPE REF TO zif_abapgit_xml_input
       RAISING
         zcx_abapgit_exception .
     METHODS deserialize_oo_transaction
@@ -78,11 +93,20 @@ CLASS zcl_abapgit_object_tran DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
         !is_rsstcd  TYPE rsstcd
       RAISING
         zcx_abapgit_exception .
+    METHODS save_authorizations
+      IMPORTING
+        iv_transaction    TYPE tstc-tcode
+        it_authorizations TYPE ty_tstca
+      RAISING
+        zcx_abapgit_exception.
+    METHODS clear_functiongroup_globals.
+    METHODS is_variant_transaction IMPORTING is_tstcp                      TYPE tstcp
+                                   RETURNING VALUE(rv_variant_transaction) TYPE abap_bool.
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
+CLASS zcl_abapgit_object_tran IMPLEMENTATION.
 
 
   METHOD add_data.
@@ -99,6 +123,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
   METHOD call_se93.
 
     DATA: lt_message TYPE STANDARD TABLE OF bdcmsgcoll.
+    DATA lv_msg TYPE string.
 
     FIELD-SYMBOLS: <ls_message> TYPE bdcmsgcoll.
 
@@ -117,17 +142,43 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
       zcx_abapgit_exception=>raise( |Error deserializing { ms_item-obj_type } { ms_item-obj_name }| ).
     ENDIF.
 
-    LOOP AT lt_message ASSIGNING <ls_message>
-                       WHERE msgtyp CA 'EAX'.
-
-      MESSAGE ID     <ls_message>-msgid
-              TYPE   <ls_message>-msgtyp
-              NUMBER <ls_message>-msgnr
-              WITH   <ls_message>-msgv1 <ls_message>-msgv2 <ls_message>-msgv3 <ls_message>-msgv4
-              INTO sy-msgli.
+    LOOP AT lt_message ASSIGNING <ls_message> WHERE msgtyp CA 'EAX'.
+      MESSAGE ID <ls_message>-msgid
+        TYPE <ls_message>-msgtyp
+        NUMBER <ls_message>-msgnr
+        WITH <ls_message>-msgv1 <ls_message>-msgv2 <ls_message>-msgv3 <ls_message>-msgv4
+        INTO lv_msg.
       zcx_abapgit_exception=>raise_t100( ).
-
     ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD clear_functiongroup_globals.
+    TYPES ty_param_vari TYPE abap_bool.
+
+    DATA lt_error_list TYPE STANDARD TABLE OF rsmp_check WITH DEFAULT KEY.
+    FIELD-SYMBOLS <lv_param_vari> TYPE ty_param_vari.
+
+    " only way to clear global fields in function group
+    CALL FUNCTION 'RS_TRANSACTION_INCONSISTENCIES'
+      EXPORTING
+        transaction_code = 'ZTHISTCODENEVEREXIST'
+      TABLES
+        error_list       = lt_error_list
+      EXCEPTIONS
+        object_not_found = 1
+        OTHERS           = 2.
+    IF sy-subrc <> 0.
+      "Expected - fine
+
+      " but there is no other way to clear this field
+      ASSIGN ('(SAPLSEUK)PARAM_VARI') TO <lv_param_vari>.
+      IF sy-subrc = 0.
+        CLEAR <lv_param_vari>.
+      ENDIF.
+
+    ENDIF.
 
   ENDMETHOD.
 
@@ -295,10 +346,15 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
 
     FIELD-SYMBOLS <ls_tpool> LIKE LINE OF lt_tpool_i18n.
 
-
     " Read XML-files data
-    io_xml->read( EXPORTING iv_name = 'I18N_TPOOL'
+    ii_xml->read( EXPORTING iv_name = 'I18N_TPOOL'
                   CHANGING  cg_data = lt_tpool_i18n ).
+
+    mo_i18n_params->trim_saplang_keyed_table(
+      EXPORTING
+        iv_lang_field_name = 'SPRSL'
+      CHANGING
+        ct_tab = lt_tpool_i18n ).
 
     " Force t-code name (security reasons)
     LOOP AT lt_tpool_i18n ASSIGNING <ls_tpool>.
@@ -315,21 +371,58 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD is_variant_transaction.
+
+    rv_variant_transaction = boolc( is_tstcp-param(1) = '@' ).
+
+  ENDMETHOD.
+
+
+  METHOD save_authorizations.
+
+    CONSTANTS: lc_hex_chk TYPE x VALUE '04'.
+    DATA: ls_transaction TYPE tstc.
+
+    transaction_read( EXPORTING iv_transaction = iv_transaction
+                      IMPORTING es_transaction = ls_transaction ).
+
+    DELETE FROM tstca WHERE tcode = iv_transaction.
+
+    IF ls_transaction IS NOT INITIAL.
+      INSERT tstca FROM TABLE it_authorizations.
+      ls_transaction-cinfo = ls_transaction-cinfo + lc_hex_chk.
+      UPDATE tstc SET cinfo = ls_transaction-cinfo WHERE tcode = ls_transaction-tcode.
+    ENDIF.
+
+  ENDMETHOD.
+
+
   METHOD serialize_texts.
 
     DATA lt_tpool_i18n TYPE TABLE OF tstct.
 
-    " Skip master language - it was already serialized
+    IF mo_i18n_params->ms_params-main_language_only = abap_true.
+      RETURN.
+    ENDIF.
+
+    " Skip main language - it was already serialized
     " Don't serialize t-code itself
     SELECT sprsl ttext
       INTO CORRESPONDING FIELDS OF TABLE lt_tpool_i18n
       FROM tstct
       WHERE sprsl <> mv_language
-      AND   tcode = ms_item-obj_name.                   "#EC CI_GENBUFF
+      AND   tcode = ms_item-obj_name
+      ORDER BY sprsl ##TOO_MANY_ITAB_FIELDS.            "#EC CI_GENBUFF
+
+    mo_i18n_params->trim_saplang_keyed_table(
+      EXPORTING
+        iv_lang_field_name = 'SPRSL'
+      CHANGING
+        ct_tab = lt_tpool_i18n ).
 
     IF lines( lt_tpool_i18n ) > 0.
       SORT lt_tpool_i18n BY sprsl ASCENDING.
-      io_xml->add( iv_name = 'I18N_TPOOL'
+      ii_xml->add( iv_name = 'I18N_TPOOL'
                    ig_data = lt_tpool_i18n ).
     ENDIF.
 
@@ -372,6 +465,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
   METHOD shift_param.
 
     DATA: ls_param  LIKE LINE OF ct_rsparam,
+          lv_fdpos  TYPE sy-fdpos,
           lv_length TYPE i.
 
     FIELD-SYMBOLS <lg_f> TYPE any.
@@ -389,8 +483,8 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
         IF ls_param-field(1) = space.
           SHIFT ls_param-field.
         ENDIF.
-        sy-fdpos = sy-fdpos + 1.
-        SHIFT cs_tstcp-param BY sy-fdpos PLACES.
+        lv_fdpos = sy-fdpos + 1.
+        SHIFT cs_tstcp-param BY lv_fdpos PLACES.
         IF cs_tstcp-param CA ';'.
           IF sy-fdpos <> 0.
             ASSIGN cs_tstcp-param(sy-fdpos) TO <lg_f>.
@@ -399,8 +493,8 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
               SHIFT ls_param-value.
             ENDIF.
           ENDIF.
-          sy-fdpos = sy-fdpos + 1.
-          SHIFT cs_tstcp-param BY sy-fdpos PLACES.
+          lv_fdpos = sy-fdpos + 1.
+          SHIFT cs_tstcp-param BY lv_fdpos PLACES.
           APPEND ls_param TO ct_rsparam.
         ELSE.
           lv_length = strlen( cs_tstcp-param ).
@@ -424,12 +518,13 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
 * see subroutine split_parameters in include LSEUKF01
 
     DATA: lv_off       TYPE i,
+          lv_fdpos     TYPE sy-fdpos,
           lv_param_beg TYPE i.
 
 
     CLEAR cs_rsstcd-s_vari.
 
-    IF cs_tstcp-param(1) = '\'.             " OO-Transaktion ohne FR
+    IF cs_tstcp-param(1) = '\'.             " OO-Transaction without FR
       split_parameters_comp( EXPORTING ig_type = c_oo_program
                                        ig_param = cs_tstcp-param
                              CHANGING  cg_value = cs_tstc-pgmna ).
@@ -444,7 +539,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
         cs_rsstcd-s_local = c_true.
       ENDIF.
       RETURN.
-    ELSEIF cs_tstcp-param(1) = '@'.         " Transaktionsvariante
+    ELSEIF cs_tstcp-param(1) = '@'.         " Transaction variant
       cs_rsstcd-s_vari = c_true.
       IF cs_tstcp-param(2) = '@@'.
         cs_rsstcd-s_ind_vari = c_true.
@@ -455,11 +550,11 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
       ENDIF.
       IF cs_tstcp-param CA ' '.
       ENDIF.
-      sy-fdpos = sy-fdpos - lv_off.
-      IF sy-fdpos > 0.
+      lv_fdpos = sy-fdpos - lv_off.
+      IF lv_fdpos > 0.
         cs_rsstcd-call_tcode = cs_tstcp-param+lv_off(sy-fdpos).
-        sy-fdpos = sy-fdpos + 1 + lv_off.
-        cs_rsstcd-variant = cs_tstcp-param+sy-fdpos.
+        lv_fdpos = lv_fdpos + 1 + lv_off.
+        cs_rsstcd-variant = cs_tstcp-param+lv_fdpos.
       ENDIF.
     ELSEIF cs_tstcp-param(1) = '/'.
       cs_rsstcd-st_tcode = c_true.
@@ -472,9 +567,9 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
       IF cs_tstcp-param CA ' '.
       ENDIF.
       lv_param_beg = sy-fdpos + 1.
-      sy-fdpos = sy-fdpos - 2.
-      IF sy-fdpos > 0.
-        cs_rsstcd-call_tcode = cs_tstcp-param+2(sy-fdpos).
+      lv_fdpos = sy-fdpos - 2.
+      IF lv_fdpos > 0.
+        cs_rsstcd-call_tcode = cs_tstcp-param+2(lv_fdpos).
       ENDIF.
       SHIFT cs_tstcp-param BY lv_param_beg PLACES.
     ELSE.
@@ -506,8 +601,54 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD transaction_read.
+
+    DATA: lt_tcodes   TYPE TABLE OF tstc,
+          lt_gui_attr TYPE TABLE OF tstcc.
+
+    CLEAR: es_transaction, es_gui_attr.
+
+    CALL FUNCTION 'RPY_TRANSACTION_READ'
+      EXPORTING
+        transaction      = iv_transaction
+      TABLES
+        tcodes           = lt_tcodes
+        gui_attributes   = lt_gui_attr
+      EXCEPTIONS
+        permission_error = 1
+        cancelled        = 2
+        not_found        = 3
+        object_not_found = 4
+        OTHERS           = 5.
+    IF sy-subrc = 4 OR sy-subrc = 3.
+      RETURN.
+    ELSEIF sy-subrc <> 0.
+      zcx_abapgit_exception=>raise_t100( ).
+    ENDIF.
+
+    READ TABLE lt_tcodes INDEX 1 INTO es_transaction.
+    ASSERT sy-subrc = 0.
+    READ TABLE lt_gui_attr INDEX 1 INTO es_gui_attr.
+    ASSERT sy-subrc = 0.
+
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown. " todo
+    " Changed-by-user is not stored in transaction metadata
+    " Instead, use owner of last transport or object directory
+
+    DATA lv_transport TYPE trkorr.
+
+    lv_transport = zcl_abapgit_factory=>get_cts_api( )->get_transport_for_object( ms_item ).
+
+    IF lv_transport IS NOT INITIAL.
+      SELECT SINGLE as4user FROM e070 INTO rv_user WHERE trkorr = lv_transport.
+    ELSE.
+      SELECT SINGLE author FROM tadir INTO rv_user
+        WHERE pgmid = 'R3TR' AND object = ms_item-obj_type AND obj_name = ms_item-obj_name.
+    ENDIF.
+
   ENDMETHOD.
 
 
@@ -526,7 +667,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
         object_not_found = 0
         OTHERS           = 3.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'Error from RPY_TRANSACTION_DELETE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -535,10 +676,10 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
   METHOD zif_abapgit_object~deserialize.
 
     CONSTANTS: lc_hex_tra TYPE x VALUE '00',
-*               c_hex_men TYPE x VALUE '01',
+*               lc_hex_men TYPE x VALUE '01',
                lc_hex_par TYPE x VALUE '02',
                lc_hex_rep TYPE x VALUE '80',
-*               c_hex_rpv TYPE x VALUE '10',
+*               lc_hex_rpv TYPE x VALUE '10',
                lc_hex_obj TYPE x VALUE '08'.
 
     DATA: lv_dynpro       TYPE d020s-dnum,
@@ -547,12 +688,14 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
           ls_tstct        TYPE tstct,
           ls_tstcc        TYPE tstcc,
           ls_tstcp        TYPE tstcp,
-          lt_param_values TYPE tty_param_values,
+          lt_tstca        TYPE ty_tstca,
+          lt_param_values TYPE ty_param_values,
           ls_rsstcd       TYPE rsstcd.
 
 
     IF zif_abapgit_object~exists( ) = abap_true.
-      zif_abapgit_object~delete( ).
+      zif_abapgit_object~delete( iv_package   = iv_package
+                                 iv_transport = iv_transport ).
     ENDIF.
 
     io_xml->read( EXPORTING iv_name = 'TSTC'
@@ -563,34 +706,36 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
                   CHANGING cg_data = ls_tstct ).
     io_xml->read( EXPORTING iv_name = 'TSTCP'
                   CHANGING cg_data = ls_tstcp ).
+    io_xml->read( EXPORTING iv_name = 'AUTHORIZATIONS'
+                  CHANGING cg_data = lt_tstca ).
 
     lv_dynpro = ls_tstc-dypno.
 
-    CASE ls_tstc-cinfo.
-      WHEN lc_hex_tra.
-        lv_type = ststc_c_type_dialog.
-      WHEN lc_hex_rep.
-        lv_type = ststc_c_type_report.
-      WHEN lc_hex_par.
-        lv_type = ststc_c_type_parameters.
-      WHEN lc_hex_obj.
-        lv_type = ststc_c_type_object.
-* todo, or ststc_c_type_variant?
-      WHEN OTHERS.
-        zcx_abapgit_exception=>raise( 'Transaction, unknown CINFO' ).
-    ENDCASE.
+    IF ls_tstc-cinfo O lc_hex_rep.
+      lv_type = c_variant_type-report.
+    ELSEIF ls_tstc-cinfo O lc_hex_obj.
+      lv_type = c_variant_type-object.
+    ELSEIF ls_tstc-cinfo O lc_hex_par.
+      IF is_variant_transaction( ls_tstcp ) = abap_true.
+        lv_type = c_variant_type-variant.
+      ELSE.
+        lv_type = c_variant_type-parameters.
+      ENDIF.
+    ELSEIF ls_tstc-cinfo O lc_hex_tra.
+      lv_type = c_variant_type-dialog.
+    ELSE.
+      zcx_abapgit_exception=>raise( 'Transaction, unknown CINFO' ).
+    ENDIF.
 
     IF ls_tstcp IS NOT INITIAL.
-      split_parameters(
-        CHANGING
-          ct_rsparam = lt_param_values
-          cs_rsstcd  = ls_rsstcd
-          cs_tstcp   = ls_tstcp
-          cs_tstc    = ls_tstc ).
+      split_parameters( CHANGING ct_rsparam = lt_param_values
+                                 cs_rsstcd  = ls_rsstcd
+                                 cs_tstcp   = ls_tstcp
+                                 cs_tstc    = ls_tstc ).
     ENDIF.
 
     CASE lv_type.
-      WHEN ststc_c_type_object.
+      WHEN c_variant_type-object.
 
         deserialize_oo_transaction( iv_package      = iv_package
                                     is_tstc         = ls_tstc
@@ -599,6 +744,10 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
                                     is_rsstcd       = ls_rsstcd ).
 
       WHEN OTHERS.
+
+        clear_functiongroup_globals( ).
+
+        corr_insert( iv_package ).
 
         CALL FUNCTION 'RPY_TRANSACTION_INSERT'
           EXPORTING
@@ -616,6 +765,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
             html_enabled            = ls_tstcc-s_webgui
             java_enabled            = ls_tstcc-s_platin
             wingui_enabled          = ls_tstcc-s_win32
+            suppress_corr_insert    = abap_true
           TABLES
             param_values            = lt_param_values
           EXCEPTIONS
@@ -629,13 +779,19 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
             db_access_error         = 8
             OTHERS                  = 9.
         IF sy-subrc <> 0.
-          zcx_abapgit_exception=>raise( 'Error from RPY_TRANSACTION_INSERT' ).
+          zcx_abapgit_exception=>raise_t100( ).
         ENDIF.
 
     ENDCASE.
 
-    " Texts deserializing (translations)
-    deserialize_texts( io_xml ).
+    IF lt_tstca IS NOT INITIAL.
+      save_authorizations( iv_transaction    = ls_tstc-tcode
+                           it_authorizations = lt_tstca ).
+    ENDIF.
+
+    IF mo_i18n_params->is_lxe_applicable( ) = abap_false.
+      deserialize_texts( io_xml ).
+    ENDIF.
 
   ENDMETHOD.
 
@@ -657,6 +813,11 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -673,17 +834,9 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~is_locked.
-
-    DATA: lv_object TYPE eqegraarg.
-
-    lv_object = |TN{ ms_item-obj_name }|.
-    OVERLAY lv_object WITH '                                          '.
-    lv_object = lv_object && '*'.
-
     rv_is_locked = exists_a_lock_entry_for( iv_lock_object = 'EEUDB'
-                                            iv_argument    = lv_object ).
-
-
+                                            iv_argument    = ms_item-obj_name
+                                            iv_prefix      = 'TN' ).
   ENDMETHOD.
 
 
@@ -707,52 +860,42 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
     <ls_bdcdata>-fnam = 'TSTC-TCODE'.
     <ls_bdcdata>-fval = ms_item-obj_name.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode                 = 'SE93'
-        mode_val              = 'E'
-      TABLES
-        using_tab             = lt_bdcdata
-      EXCEPTIONS
-        system_failure        = 1
-        communication_failure = 2
-        resource_failure      = 3
-        OTHERS                = 4
-        ##fm_subrc_ok.    "#EC CI_SUBRC
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode      = 'SE93'
+      it_bdcdata    = lt_bdcdata ).
 
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
     DATA: lv_transaction TYPE tstc-tcode,
-          lt_tcodes      TYPE TABLE OF tstc,
-          ls_tcode       LIKE LINE OF lt_tcodes,
+          ls_tcode       TYPE tstc,
           ls_tstct       TYPE tstct,
           ls_tstcp       TYPE tstcp,
-          lt_gui_attr    TYPE TABLE OF tstcc,
-          ls_gui_attr    LIKE LINE OF lt_gui_attr.
+          lt_tstca       TYPE ty_tstca,
+          ls_gui_attr    TYPE tstcc.
 
 
     lv_transaction = ms_item-obj_name.
 
-    CALL FUNCTION 'RPY_TRANSACTION_READ'
-      EXPORTING
-        transaction      = lv_transaction
-      TABLES
-        tcodes           = lt_tcodes
-        gui_attributes   = lt_gui_attr
-      EXCEPTIONS
-        permission_error = 1
-        cancelled        = 2
-        not_found        = 3
-        object_not_found = 4
-        OTHERS           = 5.
-    IF sy-subrc = 4 OR sy-subrc = 3.
+    transaction_read( EXPORTING iv_transaction = lv_transaction
+                      IMPORTING es_transaction = ls_tcode
+                                es_gui_attr    = ls_gui_attr ).
+    IF ls_tcode IS INITIAL.
       RETURN.
-    ELSEIF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'Error from RPY_TRANSACTION_READ' ).
     ENDIF.
 
     SELECT SINGLE * FROM tstct INTO ls_tstct
@@ -762,10 +905,12 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
     SELECT SINGLE * FROM tstcp INTO ls_tstcp
       WHERE tcode = lv_transaction.       "#EC CI_SUBRC "#EC CI_GENBUFF
 
-    READ TABLE lt_tcodes INDEX 1 INTO ls_tcode.
-    ASSERT sy-subrc = 0.
-    READ TABLE lt_gui_attr INDEX 1 INTO ls_gui_attr.
-    ASSERT sy-subrc = 0.
+    SELECT * FROM tstca INTO TABLE lt_tstca
+      WHERE tcode = lv_transaction
+      ORDER BY PRIMARY KEY.
+    IF sy-subrc <> 0.
+      CLEAR: lt_tstca.
+    ENDIF.
 
     io_xml->add( iv_name = 'TSTC'
                  ig_data = ls_tcode ).
@@ -777,9 +922,12 @@ CLASS ZCL_ABAPGIT_OBJECT_TRAN IMPLEMENTATION.
       io_xml->add( iv_name = 'TSTCP'
                    ig_data = ls_tstcp ).
     ENDIF.
+    io_xml->add( iv_name = 'AUTHORIZATIONS'
+                 ig_data = lt_tstca ).
 
-    " Texts serializing (translations)
-    serialize_texts( io_xml ).
+    IF mo_i18n_params->is_lxe_applicable( ) = abap_false.
+      serialize_texts( io_xml ).
+    ENDIF.
 
   ENDMETHOD.
 ENDCLASS.

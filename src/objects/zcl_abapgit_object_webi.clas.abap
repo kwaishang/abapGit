@@ -56,12 +56,15 @@ CLASS zcl_abapgit_object_webi DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
       RAISING
         zcx_abapgit_exception
         cx_ws_md_exception.
+    METHODS sort
+      CHANGING
+        cs_webi TYPE ty_webi.
 
 ENDCLASS.
 
 
 
-CLASS zcl_abapgit_object_webi IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_OBJECT_WEBI IMPLEMENTATION.
 
 
   METHOD handle_endpoint.
@@ -144,9 +147,9 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
       LOOP AT is_webi-pvepparameter ASSIGNING <ls_parameter>
           WHERE function = <ls_function>-function.
 
-        li_parameter = me->handle_single_parameter( iv_name        = <ls_parameter>-vepparam
-                                                    ii_function    = li_function
-                                                    iv_parameter_type = <ls_parameter>-vepparamtype ).
+        li_parameter = handle_single_parameter( iv_name           = <ls_parameter>-vepparam
+                                                ii_function       = li_function
+                                                iv_parameter_type = <ls_parameter>-vepparamtype ).
 
         li_parameter->set_name_mapped_to( <ls_parameter>-mappedname ).
         li_parameter->set_is_exposed( <ls_parameter>-is_exposed ).
@@ -175,6 +178,39 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
       ENDLOOP.
 
     ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD handle_single_parameter.
+    CONSTANTS:
+      BEGIN OF lc_parameter_type,
+        import TYPE vepparamtype VALUE 'I',
+        export TYPE vepparamtype VALUE 'O',
+      END OF lc_parameter_type.
+
+    CASE iv_parameter_type.
+      WHEN lc_parameter_type-import.
+        ri_parameter = ii_function->get_incoming_parameter( parameter_name  = iv_name
+                                                            version         = 'I' ).
+        IF ri_parameter IS BOUND.
+          ii_function->delete_incoming_parameter( ri_parameter ).
+        ENDIF.
+        ri_parameter = ii_function->create_incoming_parameter( iv_name ).
+
+      WHEN lc_parameter_type-export.
+
+        ri_parameter = ii_function->get_outgoing_parameter( parameter_name  = iv_name
+                                                            version         = 'I' ).
+        IF ri_parameter IS BOUND.
+          ii_function->delete_outgoing_parameter( parameter = ri_parameter ).
+        ENDIF.
+
+        ri_parameter = ii_function->create_outgoing_parameter( iv_name ).
+
+      WHEN OTHERS.
+        ASSERT 0 = 1.
+    ENDCASE.
 
   ENDMETHOD.
 
@@ -227,8 +263,7 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
       li_elem->set_signed( <ls_elem>-signed ).
       li_elem->set_abaptype( <ls_elem>-abaptype ).
 
-      IF li_elem->if_ws_md_vif_type~has_soap_extension_type(
-          sews_c_vif_version-all ) = abap_false.
+      IF li_elem->if_ws_md_vif_type~has_soap_extension_type( sews_c_vif_version-all ) = abap_false.
         READ TABLE is_webi-pveptypesoapext ASSIGNING <ls_soap>
           WITH KEY typename = <ls_elem>-typename.
         IF sy-subrc = 0.
@@ -271,8 +306,7 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
       li_table->set_line_type( mi_vi->get_type( typename = <ls_table>-typeref
                                                 version  = sews_c_vif_version-inactive ) ).
 
-      IF li_table->if_ws_md_vif_type~has_soap_extension_type(
-          sews_c_vif_version-all ) = abap_false.
+      IF li_table->if_ws_md_vif_type~has_soap_extension_type( sews_c_vif_version-all ) = abap_false.
         READ TABLE is_webi-pveptypesoapext ASSIGNING <ls_soap>
           WITH KEY typename = <ls_table>-typename.
         IF sy-subrc = 0.
@@ -285,8 +319,36 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD sort.
+    SORT cs_webi-pvepheader BY vepname version.
+    SORT cs_webi-pvepfunction BY vepname version function.
+    SORT cs_webi-pvepfault BY vepname version function fault.
+    SORT cs_webi-pvepparameter BY vepname version function vepparam vepparamtype.
+    SORT cs_webi-pveptype BY vepname version typename.
+    SORT cs_webi-pvepelemtype BY vepname version typename.
+    SORT cs_webi-pveptabletype BY vepname version typename.
+    SORT cs_webi-pvepstrutype BY vepname version typename fieldpos.
+    SORT cs_webi-pveptypesoapext BY vepname version typename.
+    SORT cs_webi-pvepeletypsoap BY vepname version typename assign_type assign_data1 assign_data2.
+    SORT cs_webi-pveptabtypsoap BY vepname version typename.
+    SORT cs_webi-pvepfuncsoapext BY vepname version function.
+    SORT cs_webi-pvepfieldref BY vepname version function vepparam vepparamtype strucid fieldname.
+    SORT cs_webi-pvependpoint BY relid vepname version sortfield.
+    SORT cs_webi-pvepvisoapext BY vepname version.
+    SORT cs_webi-pvepparasoapext BY vepname version function vepparam vepparamtype.
+    SORT cs_webi-pwsheader BY wsname version.
+    SORT cs_webi-pwssoapprop BY wsname version feature soapapp funcref propnum.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown. " todo
+
+    SELECT SINGLE changedby FROM vepheader INTO rv_user
+      WHERE vepname = ms_item-obj_name AND version = 'A'.
+    IF sy-subrc <> 0.
+      rv_user = c_user_unknown.
+    ENDIF.
+
   ENDMETHOD.
 
 
@@ -317,7 +379,6 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
           lv_exists   TYPE abap_bool,
           li_root     TYPE REF TO if_ws_md_vif_root,
           ls_endpoint LIKE LINE OF ls_webi-pvependpoint.
-
 
     io_xml->read( EXPORTING iv_name = 'WEBI'
                   CHANGING  cg_data = ls_webi ).
@@ -363,12 +424,16 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
       CATCH cx_ws_md_exception INTO lx_root.
         TRY.
             mi_vi->if_ws_md_lockable_object~unlock( ).
-          CATCH cx_ws_md_exception ##no_handler.
+          CATCH cx_ws_md_exception ##NO_HANDLER.
         ENDTRY.
-        zcx_abapgit_exception=>raise( lx_root->if_message~get_text( ) ).
+        zcx_abapgit_exception=>raise_with_text( lx_root ).
     ENDTRY.
 
     zcl_abapgit_objects_activation=>add_item( ms_item ).
+
+    zcl_abapgit_sotr_handler=>create_sotr(
+      iv_package = iv_package
+      io_xml     = io_xml ).
 
   ENDMETHOD.
 
@@ -376,18 +441,30 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
   METHOD zif_abapgit_object~exists.
 
     DATA: lv_name TYPE vepname.
-
+    DATA lv_generated TYPE abap_bool.
 
     lv_name = ms_item-obj_name.
 
+    " Check if service is generated by proxy
+    SELECT SINGLE auto_generated FROM vependpoint INTO lv_generated
+      WHERE vepname = lv_name AND version = sews_c_vif_version-active.
+    IF sy-subrc = 0 AND lv_generated = abap_true.
+      RETURN.
+    ENDIF.
+
     rv_bool = cl_ws_md_vif_root=>check_existence_by_vif_name(
       name      = lv_name
-      i_version = sews_c_vif_version-active ).
+      i_version = sews_c_vif_version-all ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -413,20 +490,24 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = ms_item-obj_type
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
     DATA: ls_webi    TYPE ty_webi,
+          lx_error   TYPE REF TO cx_ws_md_exception,
           lt_modilog TYPE STANDARD TABLE OF smodilog WITH DEFAULT KEY,
           li_vi      TYPE REF TO if_ws_md_vif,
           lv_name    TYPE vepname.
@@ -462,21 +543,21 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
         version_not_found = 1
         webi_not_exist    = 2
         OTHERS            = 3.
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from WEBI_GET_OBJECT' ).
+    IF sy-subrc = 1.
+      " no active version
+      RETURN.
+    ELSEIF sy-subrc <> 0.
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
-    SORT ls_webi-pveptype BY
-      vepname ASCENDING
-      version ASCENDING
-      typename ASCENDING.
+    sort( CHANGING cs_webi = ls_webi ).
 
     lv_name = ms_item-obj_name.
     TRY.
         li_vi = cl_ws_md_factory=>get_vif_root( )->get_virtual_interface( lv_name ).
         ls_webi-veptext = li_vi->get_short_text( sews_c_vif_version-active ).
-      CATCH cx_ws_md_exception.
-        zcx_abapgit_exception=>raise( 'error serializing WEBI' ).
+      CATCH cx_ws_md_exception INTO lx_error.
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
     ENDTRY.
 
     LOOP AT ls_webi-pvepheader ASSIGNING <ls_vepheader>.
@@ -509,38 +590,12 @@ CLASS zcl_abapgit_object_webi IMPLEMENTATION.
     io_xml->add( iv_name = 'WEBI'
                  ig_data = ls_webi ).
 
-  ENDMETHOD.
-
-  METHOD handle_single_parameter.
-    CONSTANTS:
-      BEGIN OF lc_parameter_type,
-        import TYPE vepparamtype VALUE 'I',
-        export TYPE vepparamtype VALUE 'O',
-      END OF lc_parameter_type.
-
-    CASE iv_parameter_type.
-      WHEN lc_parameter_type-import.
-        ri_parameter = ii_function->get_incoming_parameter( parameter_name  = iv_name
-                                                            version         = 'I' ).
-        IF ri_parameter IS BOUND.
-          ii_function->delete_incoming_parameter( ri_parameter ).
-        ENDIF.
-        ri_parameter = ii_function->create_incoming_parameter( iv_name ).
-
-      WHEN lc_parameter_type-export.
-
-        ri_parameter = ii_function->get_outgoing_parameter( parameter_name  = iv_name
-                                                            version         = 'I' ).
-        IF ri_parameter IS BOUND.
-          ii_function->delete_outgoing_parameter( parameter = ri_parameter ).
-        ENDIF.
-
-        ri_parameter = ii_function->create_outgoing_parameter( iv_name ).
-
-      WHEN OTHERS.
-        ASSERT 0 = 1.
-    ENDCASE.
+    zcl_abapgit_sotr_handler=>read_sotr(
+      iv_pgmid    = 'R3TR'
+      iv_object   = ms_item-obj_type
+      iv_obj_name = ms_item-obj_name
+      io_i18n_params = mo_i18n_params
+      io_xml      = io_xml ).
 
   ENDMETHOD.
-
 ENDCLASS.

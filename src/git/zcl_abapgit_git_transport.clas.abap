@@ -4,63 +4,100 @@ CLASS zcl_abapgit_git_transport DEFINITION
   CREATE PUBLIC .
 
   PUBLIC SECTION.
-* remote to local
-    CLASS-METHODS upload_pack
-      IMPORTING iv_url         TYPE string
-                iv_branch_name TYPE string
-                iv_deepen      TYPE abap_bool DEFAULT abap_true
-                it_branches    TYPE zif_abapgit_definitions=>ty_git_branch_list_tt OPTIONAL
-      EXPORTING et_objects     TYPE zif_abapgit_definitions=>ty_objects_tt
-                ev_branch      TYPE zif_abapgit_definitions=>ty_sha1
-                eo_branch_list TYPE REF TO zcl_abapgit_git_branch_list
-      RAISING   zcx_abapgit_exception.
+    INTERFACES:
+      zif_abapgit_git_transport.
 
+* remote to local
+    CLASS-METHODS upload_pack_by_branch
+      IMPORTING
+        !iv_url          TYPE string
+        !iv_branch_name  TYPE string
+        !iv_deepen_level TYPE i DEFAULT 1
+        !it_branches     TYPE zif_abapgit_git_definitions=>ty_git_branch_list_tt OPTIONAL
+      EXPORTING
+        !et_objects      TYPE zif_abapgit_definitions=>ty_objects_tt
+        !ev_branch       TYPE zif_abapgit_git_definitions=>ty_sha1
+      RAISING
+        zcx_abapgit_exception .
+    CLASS-METHODS upload_pack_by_commit
+      IMPORTING
+        !iv_url          TYPE string
+        !iv_hash         TYPE zif_abapgit_git_definitions=>ty_sha1 OPTIONAL
+        !iv_deepen_level TYPE i DEFAULT 0
+      EXPORTING
+        !et_objects      TYPE zif_abapgit_definitions=>ty_objects_tt
+        !ev_commit       TYPE zif_abapgit_git_definitions=>ty_sha1
+      RAISING
+        zcx_abapgit_exception .
 * local to remote
     CLASS-METHODS receive_pack
-      IMPORTING iv_url         TYPE string
-                iv_old         TYPE zif_abapgit_definitions=>ty_sha1
-                iv_new         TYPE zif_abapgit_definitions=>ty_sha1
-                iv_branch_name TYPE string
-                iv_pack        TYPE xstring
-      RAISING   zcx_abapgit_exception.
-
+      IMPORTING
+        !iv_url         TYPE string
+        !iv_old         TYPE zif_abapgit_git_definitions=>ty_sha1
+        !iv_new         TYPE zif_abapgit_git_definitions=>ty_sha1
+        !iv_branch_name TYPE string
+        !iv_pack        TYPE xstring OPTIONAL
+      RAISING
+        zcx_abapgit_exception .
     CLASS-METHODS branches
-      IMPORTING iv_url                TYPE string
-      RETURNING VALUE(ro_branch_list) TYPE REF TO zcl_abapgit_git_branch_list
-      RAISING   zcx_abapgit_exception.
+      IMPORTING
+        iv_url                TYPE string
+      RETURNING
+        VALUE(ro_branch_list) TYPE REF TO zcl_abapgit_git_branch_list
+      RAISING
+        zcx_abapgit_exception .
+
+  PROTECTED SECTION.
   PRIVATE SECTION.
-    CONSTANTS: BEGIN OF c_service,
-                 receive TYPE string VALUE 'receive',       "#EC NOTEXT
-                 upload  TYPE string VALUE 'upload',        "#EC NOTEXT
-               END OF c_service.
-    CONSTANTS: BEGIN OF c_smart_response_check,
-                 BEGIN OF get_refs,
-                   content_regex TYPE string VALUE '^[0-9a-f]{4}#',
-                   content_type  TYPE string VALUE 'application/x-git-<service>-pack-advertisement',
-                 END OF get_refs,
-               END OF c_smart_response_check.
 
+    CONSTANTS:
+      BEGIN OF c_service,
+        receive TYPE string VALUE 'receive',                  "#EC NOTEXT
+        upload  TYPE string VALUE 'upload',                   "#EC NOTEXT
+      END OF c_service .
+
+    CLASS-METHODS check_report_status
+      IMPORTING
+        !iv_string TYPE string
+      RAISING
+        zcx_abapgit_exception .
     CLASS-METHODS branch_list
-      IMPORTING iv_url         TYPE string
-                iv_service     TYPE string
-      EXPORTING eo_client      TYPE REF TO zcl_abapgit_http_client
-                eo_branch_list TYPE REF TO zcl_abapgit_git_branch_list
-      RAISING   zcx_abapgit_exception.
-
+      IMPORTING
+        !iv_url         TYPE string
+        !iv_service     TYPE string
+      EXPORTING
+        !eo_client      TYPE REF TO zcl_abapgit_http_client
+        !eo_branch_list TYPE REF TO zcl_abapgit_git_branch_list
+      RAISING
+        zcx_abapgit_exception .
     CLASS-METHODS find_branch
-      IMPORTING iv_url         TYPE string
-                iv_service     TYPE string
-                iv_branch_name TYPE string
-      EXPORTING eo_client      TYPE REF TO zcl_abapgit_http_client
-                ev_branch      TYPE zif_abapgit_definitions=>ty_sha1
-                eo_branch_list TYPE REF TO zcl_abapgit_git_branch_list
-      RAISING   zcx_abapgit_exception.
-
+      IMPORTING
+        !iv_url         TYPE string
+        !iv_service     TYPE string
+        !iv_branch_name TYPE string
+      EXPORTING
+        !eo_client      TYPE REF TO zcl_abapgit_http_client
+        !ev_branch      TYPE zif_abapgit_git_definitions=>ty_sha1
+        !eo_branch_list TYPE REF TO zcl_abapgit_git_branch_list
+      RAISING
+        zcx_abapgit_exception .
     CLASS-METHODS parse
-      EXPORTING ev_pack TYPE xstring
-      CHANGING  cv_data TYPE xstring
-      RAISING   zcx_abapgit_exception.
-
+      EXPORTING
+        !ev_pack TYPE xstring
+      CHANGING
+        !cv_data TYPE xstring
+      RAISING
+        zcx_abapgit_exception .
+    CLASS-METHODS upload_pack
+      IMPORTING
+        !io_client        TYPE REF TO zcl_abapgit_http_client
+        !iv_url           TYPE string
+        !iv_deepen_level  TYPE i DEFAULT 0
+        !it_hashes        TYPE zif_abapgit_git_definitions=>ty_sha1_tt
+      RETURNING
+        VALUE(rt_objects) TYPE zif_abapgit_definitions=>ty_objects_tt
+      RAISING
+        zcx_abapgit_exception .
 ENDCLASS.
 
 
@@ -68,7 +105,7 @@ ENDCLASS.
 CLASS zcl_abapgit_git_transport IMPLEMENTATION.
 
 
-  METHOD branches.
+  METHOD zif_abapgit_git_transport~branches.
 
     DATA: lo_client TYPE REF TO zcl_abapgit_http_client.
 
@@ -88,25 +125,107 @@ CLASS zcl_abapgit_git_transport IMPLEMENTATION.
 
   METHOD branch_list.
 
-    DATA: lv_data TYPE string.
-    DATA: lv_expected_content_type TYPE string.
+    CONSTANTS lc_content_regex TYPE string VALUE '^[0-9a-f]{4}#'.
+    CONSTANTS lc_content_type  TYPE string VALUE 'application/x-git-<service>-pack-advertisement'.
+
+    DATA lv_data                  TYPE string.
+    DATA lv_expected_content_type TYPE string.
 
     eo_client = zcl_abapgit_http=>create_by_url(
       iv_url     = iv_url
       iv_service = iv_service ).
 
-    lv_expected_content_type = c_smart_response_check-get_refs-content_type.
+    lv_expected_content_type = lc_content_type.
     REPLACE '<service>' IN lv_expected_content_type WITH iv_service.
 
     eo_client->check_smart_response(
         iv_expected_content_type = lv_expected_content_type
-        iv_content_regex         = c_smart_response_check-get_refs-content_regex ).
+        iv_content_regex         = lc_content_regex ).
 
     lv_data = eo_client->get_cdata( ).
 
     CREATE OBJECT eo_branch_list
       EXPORTING
         iv_data = lv_data.
+
+  ENDMETHOD.
+
+
+  METHOD check_report_status.
+
+    DATA:
+      lv_string        TYPE string,
+      lv_error         TYPE string,
+      lv_unpack_status TYPE string,
+      lv_unpack_code   TYPE string,
+      lv_unpack_text   TYPE string,
+      lv_commnd_status TYPE string,
+      lv_commnd_code   TYPE string,
+      lv_commnd_text   TYPE string.
+
+    " Based on https://git-scm.com/docs/pack-protocol/2.2.3#_report_status
+    lv_string = iv_string.
+
+    IF lv_string = ''.
+      lv_error = 'Unexpected empty reply'.
+    ELSEIF strlen( lv_string ) < 4.
+      lv_error = 'Missing pkt length for unpack status'.
+    ELSE.
+      lv_string = lv_string+4.
+      SPLIT lv_string AT cl_abap_char_utilities=>newline INTO lv_unpack_status lv_string.
+      SPLIT lv_unpack_status AT space INTO lv_unpack_text lv_unpack_code.
+
+      IF lv_unpack_text <> 'unpack'.
+        lv_error = 'Unexpected unpack status'.
+      ELSEIF lv_unpack_code <> 'ok'.
+        lv_error = |Unpack not ok ({ lv_unpack_code })|.
+      ELSEIF lv_string = ''.
+        lv_error = 'Unexpected command status'.
+      ELSEIF strlen( lv_string ) < 4.
+        lv_error = 'Missing pkt length for command status'.
+      ELSE.
+        lv_string = lv_string+4.
+        SPLIT lv_string AT cl_abap_char_utilities=>newline INTO lv_commnd_status lv_string.
+        SPLIT lv_commnd_status AT space INTO lv_commnd_code lv_commnd_text.
+
+        IF lv_commnd_code <> 'ok'. "=ng
+          " Some pre-defined error messages
+          IF lv_commnd_text CP '*pre-receive hook declined*'.
+            lv_error = 'Pre-receive hook declined'.
+          ELSEIF lv_commnd_text CP '*protected branch hook declined*'.
+            lv_error = 'Protected branch hook declined'.
+          ELSEIF lv_commnd_text CP '*push declined due to email privacy*'.
+            lv_error = 'Push declined due to email privacy'.
+          ELSEIF lv_commnd_text CP '*funny refname*'.
+            lv_error = 'Funny refname'.
+          ELSEIF lv_commnd_text CP '*failed to update ref*'.
+            lv_error = 'Failed to update ref'.
+          ELSEIF lv_commnd_text CP '*missing necessary objects*'.
+            lv_error = 'Missing necessary objects'.
+          ELSEIF lv_commnd_text CP '*refusing to delete the current branch*'.
+            lv_error = 'Branch delete not allowed'.
+          ELSEIF lv_commnd_text CP '*cannot lock ref*reference already exists*'.
+            lv_error = 'Branch already exists'.
+          ELSEIF lv_commnd_text CP '*cannot lock ref*but expected*'.
+            lv_error = 'Branch cannot be locked'.
+          ELSEIF lv_commnd_text CP '*invalid committer*'.
+            lv_error = 'Invalid committer'.
+          ELSE.
+            " Otherwise return full error message
+            lv_error = lv_commnd_text.
+          ENDIF.
+        ELSEIF strlen( lv_string ) < 4.
+          lv_error = 'Missing flush-pkt'.
+        ELSEIF lv_string <> '0000' AND lv_string <> '00000000'.
+          " We update only one reference at a time so this should be the end
+          lv_error = 'Unexpected end of status (flush-pkt)'.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lv_error IS NOT INITIAL.
+      zcx_abapgit_exception=>raise( |Git protocol error: { lv_error }| ).
+    ENDIF.
 
   ENDMETHOD.
 
@@ -189,7 +308,7 @@ CLASS zcl_abapgit_git_transport IMPLEMENTATION.
       iv_url     = iv_url
       iv_service = c_service-receive ).
 
-    lv_cap_list = 'report-status' ##NO_TEXT.
+    lv_cap_list = 'report-status'.
 
     lv_line = iv_old &&
               ` ` &&
@@ -199,7 +318,7 @@ CLASS zcl_abapgit_git_transport IMPLEMENTATION.
               zcl_abapgit_git_utils=>get_null( ) &&
               ` ` &&
               lv_cap_list &&
-              zif_abapgit_definitions=>c_newline.           "#EC NOTEXT
+              cl_abap_char_utilities=>newline.
     lv_cmd_pkt = zcl_abapgit_git_utils=>pkt_string( lv_line ).
 
     lv_buffer = lv_cmd_pkt && '0000'.
@@ -209,44 +328,72 @@ CLASS zcl_abapgit_git_transport IMPLEMENTATION.
 
     lv_xstring = lo_client->send_receive_close( lv_xstring ).
 
-* todo, this part should be changed, instead of looking at texts
-* parse the reply and look for the "ng" not good indicator
     lv_string = zcl_abapgit_convert=>xstring_to_string_utf8( lv_xstring ).
-    IF NOT lv_string CP '*unpack ok*'.
-      zcx_abapgit_exception=>raise( 'unpack not ok' ).
-    ELSEIF lv_string CP '*pre-receive hook declined*'.
-      zcx_abapgit_exception=>raise( 'pre-receive hook declined' ).
-    ELSEIF lv_string CP '*push declined due to email privacy*'.
-      zcx_abapgit_exception=>raise( 'push declined due to email privacy' ).
-    ELSEIF lv_string CP '*funny refname*'.
-      zcx_abapgit_exception=>raise( 'funny refname' ).
-    ELSEIF lv_string CP '*failed to update ref*'.
-      zcx_abapgit_exception=>raise( 'failed to update ref' ).
-    ELSEIF lv_string CP '*missing necessary objects*'.
-      zcx_abapgit_exception=>raise( 'missing necessary objects' ).
-    ELSEIF lv_string CP '*refusing to delete the current branch*'.
-      zcx_abapgit_exception=>raise( 'branch delete not allowed' ).
-    ENDIF.
+
+    check_report_status( lv_string ).
 
   ENDMETHOD.
 
 
   METHOD upload_pack.
 
-    DATA: lo_client   TYPE REF TO zcl_abapgit_http_client,
-          lv_buffer   TYPE string,
-          lv_xstring  TYPE xstring,
-          lv_line     TYPE string,
-          lv_pack     TYPE xstring,
-          lt_branches TYPE zif_abapgit_definitions=>ty_git_branch_list_tt,
-          lv_capa     TYPE string.
+    DATA: lv_capa    TYPE string,
+          lv_line    TYPE string,
+          lv_buffer  TYPE string,
+          lv_xstring TYPE xstring,
+          lv_pack    TYPE xstring.
 
-    FIELD-SYMBOLS: <ls_branch> LIKE LINE OF lt_branches.
+    FIELD-SYMBOLS: <lv_hash> LIKE LINE OF it_hashes.
+
+
+    io_client->set_headers( iv_url     = iv_url
+                            iv_service = c_service-upload ).
+
+    LOOP AT it_hashes FROM 1 ASSIGNING <lv_hash>.
+      IF sy-tabix = 1.
+        lv_capa = 'side-band-64k no-progress multi_ack'.
+        lv_line = 'want' && ` ` && <lv_hash>
+          && ` ` && lv_capa && cl_abap_char_utilities=>newline.
+      ELSE.
+        lv_line = 'want' && ` ` && <lv_hash>
+          && cl_abap_char_utilities=>newline.
+      ENDIF.
+      lv_buffer = lv_buffer && zcl_abapgit_git_utils=>pkt_string( lv_line ).
+    ENDLOOP.
+
+    IF iv_deepen_level > 0.
+      lv_buffer = lv_buffer && zcl_abapgit_git_utils=>pkt_string( |deepen { iv_deepen_level }| &&
+        cl_abap_char_utilities=>newline ).
+    ENDIF.
+
+    lv_buffer = lv_buffer
+             && '0000'
+             && '0009done' && cl_abap_char_utilities=>newline.
+
+    lv_xstring = io_client->send_receive_close( zcl_abapgit_convert=>string_to_xstring_utf8( lv_buffer ) ).
+
+    parse( IMPORTING ev_pack = lv_pack
+           CHANGING  cv_data = lv_xstring ).
+
+    IF lv_pack IS INITIAL.
+      zcx_abapgit_exception=>raise( 'Response could not be parsed - empty pack returned.' ).
+    ENDIF.
+
+    rt_objects = zcl_abapgit_git_pack=>decode( lv_pack ).
+
+  ENDMETHOD.
+
+
+  METHOD upload_pack_by_branch.
+
+    DATA: lo_client TYPE REF TO zcl_abapgit_http_client,
+          lt_hashes TYPE zif_abapgit_git_definitions=>ty_sha1_tt.
+
+    FIELD-SYMBOLS: <ls_branch> LIKE LINE OF it_branches.
 
 
     CLEAR: et_objects,
-           ev_branch,
-           eo_branch_list.
+           ev_branch.
 
     find_branch(
       EXPORTING
@@ -255,51 +402,53 @@ CLASS zcl_abapgit_git_transport IMPLEMENTATION.
         iv_branch_name = iv_branch_name
       IMPORTING
         eo_client      = lo_client
-        eo_branch_list = eo_branch_list
         ev_branch      = ev_branch ).
 
     IF it_branches IS INITIAL.
-      APPEND INITIAL LINE TO lt_branches ASSIGNING <ls_branch>.
-      <ls_branch>-sha1 = ev_branch.
+      APPEND ev_branch TO lt_hashes.
     ELSE.
-      lt_branches = it_branches.
+      LOOP AT it_branches ASSIGNING <ls_branch>.
+        APPEND <ls_branch>-sha1 TO lt_hashes.
+      ENDLOOP.
     ENDIF.
 
-    lo_client->set_headers( iv_url     = iv_url
-                            iv_service = c_service-upload ).
-
-    LOOP AT lt_branches FROM 1 ASSIGNING <ls_branch>.
-      IF sy-tabix = 1.
-        lv_capa = 'side-band-64k no-progress multi_ack' ##NO_TEXT.
-        lv_line = 'want' && ` ` && <ls_branch>-sha1
-          && ` ` && lv_capa && zif_abapgit_definitions=>c_newline. "#EC NOTEXT
-      ELSE.
-        lv_line = 'want' && ` ` && <ls_branch>-sha1
-          && zif_abapgit_definitions=>c_newline.            "#EC NOTEXT
-      ENDIF.
-      lv_buffer = lv_buffer && zcl_abapgit_git_utils=>pkt_string( lv_line ).
-    ENDLOOP.
-
-    IF iv_deepen = abap_true.
-      lv_buffer = lv_buffer && zcl_abapgit_git_utils=>pkt_string( 'deepen 1'
-        && zif_abapgit_definitions=>c_newline ).            "#EC NOTEXT
-    ENDIF.
-
-    lv_buffer = lv_buffer
-             && '0000'
-             && '0009done' && zif_abapgit_definitions=>c_newline.
-
-    lv_xstring = lo_client->send_receive_close(
-      zcl_abapgit_convert=>string_to_xstring_utf8( lv_buffer ) ).
-
-    parse( IMPORTING ev_pack = lv_pack
-           CHANGING cv_data = lv_xstring ).
-
-    IF lv_pack IS INITIAL.
-      zcx_abapgit_exception=>raise( 'empty pack' ).
-    ENDIF.
-
-    et_objects = zcl_abapgit_git_pack=>decode( lv_pack ).
+    et_objects = upload_pack( io_client       = lo_client
+                              iv_url          = iv_url
+                              iv_deepen_level = iv_deepen_level
+                              it_hashes       = lt_hashes ).
 
   ENDMETHOD.
+
+
+  METHOD upload_pack_by_commit.
+
+    DATA: lo_client TYPE REF TO zcl_abapgit_http_client,
+          lt_hashes TYPE zif_abapgit_git_definitions=>ty_sha1_tt.
+
+
+    CLEAR: et_objects,
+           ev_commit.
+
+    APPEND iv_hash TO lt_hashes.
+    ev_commit = iv_hash.
+
+    lo_client = zcl_abapgit_http=>create_by_url(
+      iv_url     = iv_url
+      iv_service = c_service-upload ).
+
+    et_objects = upload_pack( io_client       = lo_client
+                              iv_url          = iv_url
+                              iv_deepen_level = iv_deepen_level
+                              it_hashes       = lt_hashes ).
+
+  ENDMETHOD.
+
+
+  METHOD branches.
+
+    " This method is kept for compatibility reasons
+    ro_branch_list = zcl_abapgit_git_factory=>get_git_transport( )->branches( iv_url ).
+
+  ENDMETHOD.
+
 ENDCLASS.

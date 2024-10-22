@@ -8,28 +8,10 @@ CLASS zcl_abapgit_object_sicf DEFINITION
 
     INTERFACES zif_abapgit_object .
 
-    ALIASES mo_files
-      FOR zif_abapgit_object~mo_files .
-
-    TYPES: ty_hash TYPE c LENGTH 25.
-
-    CLASS-METHODS read_tadir_sicf
-      IMPORTING
-        !iv_pgmid       TYPE tadir-pgmid DEFAULT 'R3TR'
-        !iv_obj_name    TYPE tadir-obj_name
-      RETURNING
-        VALUE(rs_tadir) TYPE zif_abapgit_definitions=>ty_tadir
-      RAISING
-        zcx_abapgit_exception .
-    CLASS-METHODS read_sicf_url
-      IMPORTING
-        !iv_obj_name   TYPE tadir-obj_name
-      RETURNING
-        VALUE(rv_hash) TYPE ty_hash
-      RAISING
-        zcx_abapgit_exception .
   PROTECTED SECTION.
   PRIVATE SECTION.
+
+    TYPES ty_hash TYPE c LENGTH 25.
 
     TYPES:
       ty_icfhandler_tt TYPE STANDARD TABLE OF icfhandler WITH DEFAULT KEY .
@@ -39,6 +21,17 @@ CLASS zcl_abapgit_object_sicf DEFINITION
         icfparguid TYPE icfservice-icfparguid,
       END OF ty_sicf_key .
 
+    METHODS serialize_otr
+      IMPORTING
+        !io_xml TYPE REF TO zif_abapgit_xml_output
+      RAISING
+        zcx_abapgit_exception .
+    METHODS deserialize_otr
+      IMPORTING
+        !iv_package TYPE devclass
+        !io_xml     TYPE REF TO zif_abapgit_xml_input
+      RAISING
+        zcx_abapgit_exception .
     METHODS read
       IMPORTING
         !iv_clear      TYPE abap_bool DEFAULT abap_true
@@ -79,11 +72,25 @@ CLASS zcl_abapgit_object_sicf DEFINITION
         VALUE(rv_parent) TYPE icfparguid
       RAISING
         zcx_abapgit_exception .
+
+    CLASS-METHODS get_hash_from_object
+      IMPORTING
+        !iv_obj_name   TYPE tadir-obj_name
+      RETURNING
+        VALUE(rv_hash) TYPE ty_hash
+      RAISING
+        zcx_abapgit_exception.
+
+    CLASS-METHODS get_icfaltname
+      IMPORTING
+        !is_icfservice      TYPE icfservice
+      RETURNING
+        VALUE(rv_icfaltnme) TYPE icfservice-icfaltnme.
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
+CLASS zcl_abapgit_object_sicf IMPLEMENTATION.
 
 
   METHOD change_sicf.
@@ -97,10 +104,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
 
     lt_icfhndlist = to_icfhndlist( it_icfhandler ).
 
-* Do not add handlers if they already exist, it will make the below
-* call to SAP standard code raise an exception
+    " Do not add handlers if they already exist, it will make the below
+    " call to SAP standard code raise an exception
     SELECT * FROM icfhandler INTO TABLE lt_existing
-      WHERE icf_name = is_icfservice-icf_name.
+      WHERE icf_name = is_icfservice-icf_name
+      ORDER BY PRIMARY KEY.
     LOOP AT lt_existing ASSIGNING <ls_existing>.
       DELETE TABLE lt_icfhndlist FROM <ls_existing>-icfhandler.
     ENDLOOP.
@@ -110,6 +118,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
     cl_icf_tree=>if_icf_tree~change_node(
       EXPORTING
         icf_name                  = is_icfservice-orig_name
+        icfaltnme                 = get_icfaltname( is_icfservice )
         icfparguid                = iv_parent
         icfdocu                   = is_icfdocu
         doculang                  = mv_language
@@ -147,8 +156,34 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
         no_authority              = 26
         OTHERS                    = 27 ).
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |SICF - error from change_node. Subrc = { sy-subrc }| ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD deserialize_otr.
+
+    DATA:
+      lt_sots     TYPE zcl_abapgit_sots_handler=>ty_sots_tt,
+      lt_sots_use TYPE zcl_abapgit_sots_handler=>ty_sots_use_tt.
+
+    FIELD-SYMBOLS:
+      <ls_sots_use> LIKE LINE OF lt_sots_use.
+
+    io_xml->read( EXPORTING iv_name = 'SOTS'
+                  CHANGING cg_data = lt_sots ).
+    io_xml->read( EXPORTING iv_name = 'SOTS_USE'
+                  CHANGING cg_data = lt_sots_use ).
+
+    LOOP AT lt_sots_use ASSIGNING <ls_sots_use>.
+      <ls_sots_use>-obj_name = ms_item-obj_name.
+    ENDLOOP.
+
+    zcl_abapgit_sots_handler=>create_sots_from_data(
+      iv_package  = iv_package
+      it_sots     = lt_sots
+      it_sots_use = lt_sots_use ).
 
   ENDMETHOD.
 
@@ -169,7 +204,55 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
         no_authority          = 5
         OTHERS                = 6 ).
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |SICF - error from service_from_url. Subrc = { sy-subrc }| ).
+      zcx_abapgit_exception=>raise_t100( ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD get_hash_from_object.
+
+    DATA:
+      lv_icfnodguid TYPE icfservice-icfnodguid,
+      lv_url        TYPE icfurlbuf,
+      lv_ext_url    TYPE string.
+
+    SELECT SINGLE icfnodguid FROM icfservice INTO lv_icfnodguid
+      WHERE icf_name = iv_obj_name(15)
+      AND icfparguid = iv_obj_name+15.
+
+    IF sy-subrc = 0.
+      CALL FUNCTION 'HTTP_GET_URL_FROM_NODGUID'
+        EXPORTING
+          nodguid      = lv_icfnodguid
+        IMPORTING
+          url          = lv_url
+          extended_url = lv_ext_url
+        EXCEPTIONS
+          icf_inconst  = 1
+          OTHERS       = 2.
+      IF sy-subrc = 0.
+        " It's possible that the URL contains the system id, for example for WD applications with names
+        " longer than 15 characters. In that case, use the extended URL to generate the hash (#5064)
+        IF lv_ext_url <> lv_url.
+          rv_hash = zcl_abapgit_hash=>sha1_raw( zcl_abapgit_convert=>string_to_xstring_utf8( |{ lv_ext_url }| ) ).
+        ELSE.
+          rv_hash = zcl_abapgit_hash=>sha1_raw( zcl_abapgit_convert=>string_to_xstring_utf8( |{ lv_url }| ) ).
+        ENDIF.
+      ENDIF.
+    ELSE.
+      rv_hash = to_lower( iv_obj_name+15 ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD get_icfaltname.
+
+    rv_icfaltnme = is_icfservice-icfaltnme.
+    " If the original name is different (lower vs upper case), it needs to be deserialized
+    IF is_icfservice-icfaltnme <> is_icfservice-icfaltnme_orig.
+      rv_icfaltnme = is_icfservice-icfaltnme_orig.
     ENDIF.
 
   ENDMETHOD.
@@ -180,13 +263,14 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
     DATA: lt_icfhndlist TYPE icfhndlist,
           ls_icfserdesc TYPE icfserdesc,
           ls_icfdocu    TYPE icfdocu,
+          lv_icfnodguid TYPE icfnodguid,
           lv_parent     TYPE icfparguid.
 
 
     lt_icfhndlist = to_icfhndlist( it_icfhandler ).
     lv_parent = find_parent( iv_url ).
 
-* nice, it seems that the structure should be mistreated
+    " Nice, it seems that the structure should be mistreated
     ls_icfdocu = is_icfdocu-icf_docu.
 
     MOVE-CORRESPONDING is_icfservice TO ls_icfserdesc.
@@ -202,7 +286,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
         application               = space
         icfserdesc                = ls_icfserdesc
         icfactive                 = abap_true
-        icfaltnme                 = is_icfservice-icfaltnme
+        icfaltnme                 = get_icfaltname( is_icfservice )
+      IMPORTING
+        icfnodguid                = lv_icfnodguid
       EXCEPTIONS
         empty_icf_name            = 1
         no_new_virtual_host       = 2
@@ -232,8 +318,12 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
         no_authority              = 26
         OTHERS                    = 27 ).
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |SICF - error from insert_node: { sy-subrc }| ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
+
+    " Update item with name assigned by system
+    SELECT SINGLE icfparguid INTO ms_item-obj_name+15 FROM icfservice
+      WHERE icfnodguid = lv_icfnodguid.
 
   ENDMETHOD.
 
@@ -252,7 +342,8 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
     CLEAR et_icfhandler.
     CLEAR ev_url.
 
-    ls_key = read_tadir_sicf( ms_item-obj_name )-obj_name.
+    ls_key-icf_name   = ms_item-obj_name(15).
+    ls_key-icfparguid = ms_item-obj_name+15.
 
     cl_icf_tree=>if_icf_tree~get_info_from_serv(
       EXPORTING
@@ -270,7 +361,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
         no_authority      = 4
         OTHERS            = 5 ).
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |SICF - error from get_info_from_serv. Subrc = { sy-subrc }| ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     ASSERT lines( lt_serv_info ) = 1.
@@ -295,69 +386,32 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD read_sicf_url.
+  METHOD serialize_otr.
 
-* note: this method is called dynamically from some places
+    DATA:
+      lt_sots     TYPE zcl_abapgit_sots_handler=>ty_sots_tt,
+      lt_sots_use TYPE zcl_abapgit_sots_handler=>ty_sots_use_tt.
 
-    DATA: lv_name    TYPE icfname,
-          lv_url     TYPE string,
-          lv_parguid TYPE icfparguid.
+    FIELD-SYMBOLS:
+      <ls_sots_use> LIKE LINE OF lt_sots_use.
 
-
-    lv_name    = iv_obj_name.
-    lv_parguid = iv_obj_name+15.
-
-    cl_icf_tree=>if_icf_tree~get_info_from_serv(
+    zcl_abapgit_sots_handler=>read_sots(
       EXPORTING
-        icf_name          = lv_name
-        icfparguid        = lv_parguid
+        iv_object   = ms_item-obj_type
+        iv_obj_name = ms_item-obj_name
+        io_i18n_params = mo_i18n_params
       IMPORTING
-        url               = lv_url
-      EXCEPTIONS
-        wrong_name        = 1
-        wrong_parguid     = 2
-        incorrect_service = 3
-        no_authority      = 4
-        OTHERS            = 5 ).
-    IF sy-subrc = 0.
-      rv_hash = zcl_abapgit_hash=>sha1_raw( zcl_abapgit_convert=>string_to_xstring_utf8( lv_url ) ).
-    ENDIF.
+        et_sots     = lt_sots
+        et_sots_use = lt_sots_use ).
 
-  ENDMETHOD.
-
-
-  METHOD read_tadir_sicf.
-
-* note: this method is called dynamically from some places
-
-    DATA: lt_tadir    TYPE zif_abapgit_definitions=>ty_tadir_tt,
-          lv_hash     TYPE ty_hash,
-          lv_obj_name TYPE tadir-obj_name.
-
-    FIELD-SYMBOLS: <ls_tadir> LIKE LINE OF lt_tadir.
-
-
-    lv_hash = iv_obj_name+15.
-    CONCATENATE iv_obj_name(15) '%' INTO lv_obj_name.
-
-    SELECT * FROM tadir INTO CORRESPONDING FIELDS OF TABLE lt_tadir
-      WHERE pgmid = iv_pgmid
-      AND object = 'SICF'
-      AND obj_name LIKE lv_obj_name
-      ORDER BY PRIMARY KEY.                             "#EC CI_GENBUFF
-
-    LOOP AT lt_tadir ASSIGNING <ls_tadir>.
-      IF read_sicf_url( <ls_tadir>-obj_name ) = lv_hash.
-        rs_tadir = <ls_tadir>.
-        RETURN.
-      ENDIF.
+    LOOP AT lt_sots_use ASSIGNING <ls_sots_use>.
+      CLEAR <ls_sots_use>-obj_name.
     ENDLOOP.
 
-    IF lines( lt_tadir ) = 1.
-      READ TABLE lt_tadir INDEX 1 ASSIGNING <ls_tadir>.
-      ASSERT sy-subrc = 0.
-      rs_tadir = <ls_tadir>.
-    ENDIF.
+    io_xml->add( iv_name = 'SOTS'
+                 ig_data = lt_sots ).
+    io_xml->add( iv_name = 'SOTS_USE'
+                 ig_data = lt_sots_use ).
 
   ENDMETHOD.
 
@@ -366,8 +420,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
 
     FIELD-SYMBOLS: <ls_list> LIKE LINE OF it_list.
 
-
-* convert to sorted table
+    " Convert to sorted table
     LOOP AT it_list ASSIGNING <ls_list>.
       INSERT <ls_list>-icfhandler INTO TABLE rt_list.
     ENDLOOP.
@@ -378,7 +431,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
   METHOD zif_abapgit_object~changed_by.
 
     DATA: ls_icfservice TYPE icfservice.
-
 
     read( EXPORTING iv_clear = abap_false
           IMPORTING es_icfservice = ls_icfservice ).
@@ -394,7 +446,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
 
   METHOD zif_abapgit_object~delete.
 
-    DATA: ls_icfservice TYPE icfservice.
+    DATA ls_icfservice TYPE icfservice.
 
     read( IMPORTING es_icfservice = ls_icfservice ).
 
@@ -411,12 +463,17 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
       zcx_abapgit_exception=>raise( 'SICF - cannot delete root node, delete node manually' ).
     ENDIF.
 
+    " OTR long texts
+    zcl_abapgit_sots_handler=>delete_sots(
+      iv_object   = ms_item-obj_type
+      iv_obj_name = ms_item-obj_name ).
+
     " Delete Application Customizing Data the hard way, as it isn't done by the API.
-    " If we wouldn't we would get errors from the API if entrys exist.
+    " If we wouldn't we would get errors from the API if entries exist.
     " Transaction SICF does the same.
     DELETE FROM icfapplcust
-           WHERE icf_name = ls_icfservice-icf_name
-           AND icfparguid = ls_icfservice-icfparguid.
+      WHERE icf_name = ls_icfservice-icf_name
+      AND icfparguid = ls_icfservice-icfparguid.
 
     cl_icf_tree=>if_icf_tree~delete_node(
       EXPORTING
@@ -437,7 +494,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
         no_authority                = 11
         OTHERS                      = 12 ).
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |SICF - error from delete_node. Subrc = { sy-subrc }| ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -452,7 +509,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
           lv_exists     TYPE abap_bool,
           lt_icfhandler TYPE TABLE OF icfhandler.
 
-
     io_xml->read( EXPORTING iv_name = 'URL'
                   CHANGING cg_data = lv_url ).
     io_xml->read( EXPORTING iv_name = 'ICFSERVICE'
@@ -461,7 +517,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
                   CHANGING cg_data = ls_icfdocu ).
     io_xml->read( EXPORTING iv_name = 'ICFHANDLER_TABLE'
                   CHANGING cg_data = lt_icfhandler ).
-
 
     lv_exists = zif_abapgit_object~exists( ).
     IF lv_exists = abap_false.
@@ -479,30 +534,32 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
                    iv_parent     = ls_read-icfparguid ).
     ENDIF.
 
+    " OTR long texts
+    deserialize_otr(
+      iv_package = iv_package
+      io_xml     = io_xml ).
+
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~exists.
 
-    DATA: ls_tadir TYPE zif_abapgit_definitions=>ty_tadir,
-          ls_key   TYPE ty_sicf_key.
+    DATA ls_key TYPE ty_sicf_key.
 
-    ls_tadir = read_tadir_sicf( ms_item-obj_name ).
-
-    rv_bool = boolc( NOT ls_tadir IS INITIAL ).
-
-    IF rv_bool = abap_true.
-      ls_key = ls_tadir-obj_name.
-      SELECT SINGLE icfaltnme FROM icfservice INTO ls_key-icf_name
-        WHERE icf_name = ls_key-icf_name
-        AND icfparguid = ls_key-icfparguid.
-      rv_bool = boolc( sy-subrc = 0 ).
-    ENDIF.
+    SELECT SINGLE icfaltnme FROM icfservice INTO ls_key-icf_name
+      WHERE icf_name = ms_item-obj_name(15)
+      AND icfparguid = ms_item-obj_name+15.
+    rv_bool = boolc( sy-subrc = 0 ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -555,19 +612,51 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
     ls_bcdata-fval = '=ONLI'.
     APPEND ls_bcdata TO lt_bcdata.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SICF'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bcdata
-      EXCEPTIONS
-        OTHERS    = 1.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SICF'
+      it_bdcdata = lt_bcdata ).
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from ABAP4_CALL_TRANSACTION, SICF' ).
-    ENDIF.
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+
+    DATA:
+      lt_tadir    TYPE zif_abapgit_definitions=>ty_tadir_tt,
+      lv_hash     TYPE ty_hash,
+      lv_obj_name TYPE tadir-obj_name.
+
+    FIELD-SYMBOLS <ls_tadir> LIKE LINE OF lt_tadir.
+
+    lv_obj_name = to_upper( iv_filename(15) ) && '%'.
+    lv_hash     = iv_filename+15(25).
+
+    SELECT * FROM tadir INTO CORRESPONDING FIELDS OF TABLE lt_tadir
+      WHERE pgmid = 'R3TR'
+      AND object  = 'SICF'
+      AND obj_name LIKE lv_obj_name
+      ORDER BY PRIMARY KEY ##TOO_MANY_ITAB_FIELDS.      "#EC CI_GENBUFF
+
+    LOOP AT lt_tadir ASSIGNING <ls_tadir>.
+      IF get_hash_from_object( <ls_tadir>-obj_name ) = lv_hash.
+        cs_item-obj_name = <ls_tadir>-obj_name.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+
+    DATA:
+      lv_rest     TYPE string,
+      lv_old_name TYPE string.
+
+    SPLIT cv_filename AT '.' INTO lv_old_name lv_rest.
+    cv_filename = |{ cv_filename(15) }{ get_hash_from_object( is_item-obj_name ) }.{ lv_rest }|.
 
   ENDMETHOD.
 
@@ -579,11 +668,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
           lv_url        TYPE string,
           lt_icfhandler TYPE TABLE OF icfhandler.
 
-
     read( IMPORTING es_icfservice = ls_icfservice
                     es_icfdocu    = ls_icfdocu
                     et_icfhandler = lt_icfhandler
                     ev_url        = lv_url ).
+
     IF ls_icfservice IS INITIAL.
       RETURN.
     ENDIF.
@@ -591,10 +680,16 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
     CLEAR ls_icfservice-icf_mandt.
     CLEAR ls_icfservice-icfnodguid.
     CLEAR ls_icfservice-icfparguid.
+    CLEAR ls_icfservice-icfchildno.
+    CLEAR ls_icfservice-icfaliasno.
     CLEAR ls_icfservice-icf_user.
     CLEAR ls_icfservice-icf_cclnt.
     CLEAR ls_icfservice-icf_mclnt.
-    CLEAR ls_icfservice-icfaltnme_orig.
+    " If the original name is different (lower vs upper case), it needs to be serialized
+    IF ls_icfservice-icfaltnme = ls_icfservice-icfaltnme_orig.
+      CLEAR ls_icfservice-icfaltnme_orig.
+    ENDIF.
+    CLEAR ls_icfservice-icfbitmap.
 
     io_xml->add( iv_name = 'URL'
                  ig_data = lv_url ).
@@ -604,6 +699,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SICF IMPLEMENTATION.
                  ig_data = ls_icfdocu ).
     io_xml->add( iv_name = 'ICFHANDLER_TABLE'
                  ig_data = lt_icfhandler ).
+
+    " OTR long texts
+    serialize_otr( io_xml ).
 
   ENDMETHOD.
 ENDCLASS.

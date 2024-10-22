@@ -2,10 +2,10 @@ CLASS zcl_abapgit_object_wdya DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
+    CONSTANTS c_longtext_id_wdya TYPE dokil-id VALUE 'WA'.
+
     METHODS read
       EXPORTING es_app        TYPE wdy_application
                 et_properties TYPE wdy_app_property_table
@@ -154,6 +154,8 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
         zcx_abapgit_exception=>raise( 'WDYA, error deleting' ).
     ENDTRY.
 
+    delete_longtexts( c_longtext_id_wdya ).
+
   ENDMETHOD.
 
 
@@ -161,7 +163,6 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
 
     DATA: ls_app        TYPE wdy_application,
           lt_properties TYPE wdy_app_property_table.
-
 
     io_xml->read( EXPORTING iv_name = 'APP'
                   CHANGING cg_data = ls_app ).
@@ -171,6 +172,13 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
     save( is_app        = ls_app
           it_properties = lt_properties
           iv_package    = iv_package ).
+
+    zcl_abapgit_sotr_handler=>create_sotr(
+      iv_package = iv_package
+      io_xml     = io_xml ).
+
+    deserialize_longtexts( ii_xml         = io_xml
+                           iv_longtext_id = c_longtext_id_wdya ).
 
   ENDMETHOD.
 
@@ -201,6 +209,11 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -222,14 +235,17 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = ms_item-obj_type
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -238,7 +254,6 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
     DATA: ls_app        TYPE wdy_application,
           lt_properties TYPE wdy_app_property_table.
 
-
     read( IMPORTING es_app        = ls_app
                     et_properties = lt_properties ).
 
@@ -246,6 +261,16 @@ CLASS ZCL_ABAPGIT_OBJECT_WDYA IMPLEMENTATION.
                  ig_data = ls_app ).
     io_xml->add( iv_name = 'PROPERTIES'
                  ig_data = lt_properties ).
+
+    zcl_abapgit_sotr_handler=>read_sotr(
+      iv_pgmid    = 'R3TR'
+      iv_object   = ms_item-obj_type
+      iv_obj_name = ms_item-obj_name
+      io_i18n_params = mo_i18n_params
+      io_xml      = io_xml ).
+
+    serialize_longtexts( ii_xml         = io_xml
+                         iv_longtext_id = c_longtext_id_wdya ).
 
   ENDMETHOD.
 ENDCLASS.

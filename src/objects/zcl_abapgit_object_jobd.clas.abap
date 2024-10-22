@@ -11,12 +11,40 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_JOBD IMPLEMENTATION.
+CLASS zcl_abapgit_object_jobd IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
 
-    rv_user = c_user_unknown.
+    DATA: lr_job_definition TYPE REF TO data,
+          lo_job_definition TYPE REF TO object,
+          lv_name           TYPE ty_jd_name.
+
+    FIELD-SYMBOLS: <lg_job_definition> TYPE any,
+                   <lg_field>          TYPE any.
+
+    lv_name = ms_item-obj_name.
+
+    TRY.
+        CREATE DATA lr_job_definition TYPE ('CL_JR_JOB_DEFINITION=>TY_JOB_DEFINITION').
+        ASSIGN lr_job_definition->* TO <lg_job_definition>.
+        ASSERT sy-subrc = 0.
+
+        CREATE OBJECT lo_job_definition TYPE ('CL_JR_JOB_DEFINITION')
+          EXPORTING
+            im_jd_name = lv_name.
+
+        CALL METHOD lo_job_definition->('GET_JD_ATTRIBUTES')
+          IMPORTING
+            ex_jd_attributes = <lg_job_definition>.
+
+        ASSIGN COMPONENT 'CHANGED_BY' OF STRUCTURE <lg_job_definition> TO <lg_field>.
+        IF sy-subrc = 0.
+          rv_user = <lg_field>.
+        ENDIF.
+
+      CATCH cx_root ##NO_HANDLER.
+    ENDTRY.
 
   ENDMETHOD.
 
@@ -46,6 +74,7 @@ CLASS ZCL_ABAPGIT_OBJECT_JOBD IMPLEMENTATION.
 
     DATA: lr_job_definition TYPE REF TO data,
           lo_job_definition TYPE REF TO object,
+          lx_error          TYPE REF TO cx_root,
           lv_name           TYPE ty_jd_name.
 
     FIELD-SYMBOLS: <lg_job_definition> TYPE any,
@@ -77,8 +106,8 @@ CLASS ZCL_ABAPGIT_OBJECT_JOBD IMPLEMENTATION.
           EXPORTING
             im_jd_attributes = <lg_job_definition>.
 
-      CATCH cx_root.
-        zcx_abapgit_exception=>raise( |Error deserializing JOBD| ).
+      CATCH cx_root INTO lx_error.
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
     ENDTRY.
 
     zcl_abapgit_objects_activation=>add_item( ms_item ).
@@ -111,16 +140,18 @@ CLASS ZCL_ABAPGIT_OBJECT_JOBD IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_metadata.
-
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
-
   ENDMETHOD.
 
 
@@ -152,9 +183,21 @@ CLASS ZCL_ABAPGIT_OBJECT_JOBD IMPLEMENTATION.
         OTHERS            = 2.
 
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |Error from TR_OBJECT_JUMP_TO_TOOL, JOBD| ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -196,6 +239,9 @@ CLASS ZCL_ABAPGIT_OBJECT_JOBD IMPLEMENTATION.
         CLEAR <lg_field>.
 
         ASSIGN COMPONENT 'CREATED_TIME' OF STRUCTURE <lg_job_definition> TO <lg_field>.
+        CLEAR <lg_field>.
+
+        ASSIGN COMPONENT 'CHANGEDBY' OF STRUCTURE <lg_job_definition> TO <lg_field>.
         CLEAR <lg_field>.
 
         ASSIGN COMPONENT 'CHANGED_DATE' OF STRUCTURE <lg_job_definition> TO <lg_field>.

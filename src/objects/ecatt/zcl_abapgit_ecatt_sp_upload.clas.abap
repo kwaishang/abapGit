@@ -27,7 +27,7 @@ ENDCLASS.
 
 
 
-CLASS zcl_abapgit_ecatt_sp_upload IMPLEMENTATION.
+CLASS ZCL_ABAPGIT_ECATT_SP_UPLOAD IMPLEMENTATION.
 
 
   METHOD get_ecatt_sp.
@@ -51,7 +51,7 @@ CLASS zcl_abapgit_ecatt_sp_upload IMPLEMENTATION.
           li_ixml = cl_ixml=>create( ).
           li_dom  = li_ixml->create_document( ).
           li_root ?= li_section->clone( ).
-          li_dom->append_child( new_child = li_root ).
+          li_dom->append_child( li_root ).
           CALL FUNCTION 'SDIXML_DOM_TO_XML'
             EXPORTING
               document      = li_dom
@@ -94,23 +94,21 @@ CLASS zcl_abapgit_ecatt_sp_upload IMPLEMENTATION.
           lo_ecatt_sp TYPE REF TO object.
 
     FIELD-SYMBOLS: <lg_ecatt_sp> TYPE any,
-                   <lv_d_akh>    TYPE data,
-                   <lv_i_akh>    TYPE data.
+                   <lg_d_akh>    TYPE data,
+                   <lg_i_akh>    TYPE data.
 
     TRY.
         ch_object-i_devclass = ch_object-d_devclass.
 
         ASSIGN COMPONENT 'D_AKH' OF STRUCTURE ch_object
-               TO <lv_d_akh>. " doesn't exist in 702
+               TO <lg_d_akh>. " doesn't exist in 702
         ASSIGN COMPONENT 'I_AKH' OF STRUCTURE ch_object
-               TO <lv_i_akh>. " doesn't exist in 702
-        IF <lv_d_akh> IS ASSIGNED AND <lv_i_akh> IS ASSIGNED.
-          <lv_i_akh> = <lv_d_akh>.
+               TO <lg_i_akh>. " doesn't exist in 702
+        IF <lg_d_akh> IS ASSIGNED AND <lg_i_akh> IS ASSIGNED.
+          <lg_i_akh> = <lg_d_akh>.
         ENDIF.
 
-        super->upload(
-          CHANGING
-            ch_object = ch_object ).
+        super->upload( CHANGING ch_object = ch_object ).
 
         upload_data_from_stream( ch_object-filename ).
 
@@ -130,7 +128,7 @@ CLASS zcl_abapgit_ecatt_sp_upload IMPLEMENTATION.
         lv_exc_occ = 'X'.
     ENDTRY.
 
-    ASSIGN me->ecatt_object TO <lg_ecatt_sp>.
+    ASSIGN ecatt_object TO <lg_ecatt_sp>.
     ASSERT sy-subrc = 0.
 
     lo_ecatt_sp = <lg_ecatt_sp>.
@@ -164,7 +162,7 @@ CLASS zcl_abapgit_ecatt_sp_upload IMPLEMENTATION.
       CATCH cx_ecatt_apl INTO lx_ecatt.
         lv_exc_occ = 'X'.
     ENDTRY.
-* Devesh,C5129871  18.07.2011  Releasing enqueu after uploading
+* Devesh,C5129871  18.07.2011  Releasing enqueue after uploading
 *begin
     TRY.
         ecatt_object->close_object( im_suppress_events = 'X' ).

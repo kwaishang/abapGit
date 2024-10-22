@@ -3,10 +3,6 @@ CLASS zcl_abapgit_object_sots DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
   PUBLIC SECTION.
     INTERFACES:
       zif_abapgit_object.
-
-    ALIASES:
-      mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES:
@@ -14,13 +10,13 @@ CLASS zcl_abapgit_object_sots DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
         header  TYPE sotr_headu,
         entries TYPE sotr_textl_tt,
       END OF ty_sots,
-      tty_sots TYPE STANDARD TABLE OF ty_sots
+      ty_sots_tt TYPE STANDARD TABLE OF ty_sots
                     WITH NON-UNIQUE DEFAULT KEY.
 
     METHODS:
       read_sots
         RETURNING
-          VALUE(rt_sots) TYPE tty_sots,
+          VALUE(rt_sots) TYPE ty_sots_tt,
 
       create_sots
         IMPORTING
@@ -40,7 +36,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
+CLASS zcl_abapgit_object_sots IMPLEMENTATION.
 
 
   METHOD create_sots.
@@ -52,7 +48,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
           lv_source_langu          TYPE spras,
           ls_header                TYPE btfr_head,
           lv_flag_is_string        TYPE btfr_flag VALUE abap_true,
-          lv_text_tab              TYPE sotr_text_tt,
+          lt_text_tab              TYPE sotr_text_tt,
           lv_concept_default       TYPE sotr_conc,
           lt_entries               TYPE sotr_textl_tt,
           lv_concept               LIKE is_sots-header-concept,
@@ -68,11 +64,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
 
     PERFORM btfr_create
       IN PROGRAM saplsotr_db_string
-      USING    iv_object
-               lv_source_langu
-               lv_flag_correction_entry
-               lv_flag_is_string
-      CHANGING lv_text_tab
+      USING iv_object
+            lv_source_langu
+            lv_flag_correction_entry
+            lv_flag_is_string
+      CHANGING lt_text_tab
                lt_entries
                ls_header
                lv_concept
@@ -87,7 +83,8 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
       WHEN 3.
         zcx_abapgit_exception=>raise( |Enter a permitted object type| ).
       WHEN 4.
-        zcx_abapgit_exception=>raise( |The concept will be created in the non-original system| ).
+        "The concept will be created in the non-original system (not an error)
+        RETURN.
       WHEN 5.
         zcx_abapgit_exception=>raise( |Invalid alias| ).
       WHEN 6.
@@ -103,9 +100,18 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
 
   METHOD get_raw_text_filename.
 
+    DATA lv_langu TYPE string.
+
+    " Lower case language codes can cause duplicate filenames therefore add suffix to make them unique
+    " Note: Using ISO code would be better but is not compatible with existing files
+    lv_langu = is_entry-langu.
+    IF lv_langu = to_lower( lv_langu ).
+      lv_langu = lv_langu && '-'.
+    ENDIF.
+
     rv_filename =
         to_lower( |{ is_entry-concept }_|
-               && |{ is_entry-langu   }_|
+               && |{ lv_langu         }_|
                && |{ is_entry-object  }_|
                && |{ is_entry-lfd_num }| ).
 
@@ -115,6 +121,8 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
   METHOD read_sots.
 
     DATA: lt_sotr_head TYPE STANDARD TABLE OF sotr_headu,
+          lt_objects   TYPE sotr_objects,
+          lv_object    LIKE LINE OF lt_objects,
           ls_sots      LIKE LINE OF rt_sots.
 
     FIELD-SYMBOLS: <ls_sotr_head> TYPE sotr_head,
@@ -127,6 +135,24 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
              ORDER BY PRIMARY KEY.
 
     LOOP AT lt_sotr_head ASSIGNING <ls_sotr_head>.
+
+      CALL FUNCTION 'SOTR_OBJECT_GET_OBJECTS'
+        EXPORTING
+          object_vector    = <ls_sotr_head>-objid_vec
+        IMPORTING
+          objects          = lt_objects
+        EXCEPTIONS
+          object_not_found = 1
+          OTHERS           = 2.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+
+      READ TABLE lt_objects INDEX 1 INTO lv_object.
+      ASSERT sy-subrc = 0.
+
+      " Handled by object serializer
+      CHECK lv_object <> 'SICF' AND lv_object <> 'CPUB'.
 
       CLEAR: ls_sots.
 
@@ -167,19 +193,25 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown.
+    SELECT SINGLE chan_name FROM sotr_headu INTO rv_user
+      WHERE paket = ms_item-obj_name.                   "#EC CI_NOORDER
+    IF sy-subrc <> 0.
+      rv_user = c_user_unknown.
+    ENDIF.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~delete.
 
-    DATA: lt_sots TYPE tty_sots.
+    DATA: lt_sots TYPE ty_sots_tt.
 
     FIELD-SYMBOLS: <ls_sots> TYPE ty_sots.
 
     lt_sots = read_sots( ).
 
     LOOP AT lt_sots ASSIGNING <ls_sots>.
+      " Remove any usage to ensure deletion, see function module BTFR_CHECK
+      DELETE FROM sotr_useu WHERE concept = <ls_sots>-header-concept.
 
       CALL FUNCTION 'BTFR_DELETE_SINGLE_TEXT'
         EXPORTING
@@ -195,7 +227,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
           OTHERS              = 7.
 
       IF sy-subrc <> 0.
-        zcx_abapgit_exception=>raise( |Error in BTFR_DELETE_SINGLE_TEXT subrc={ sy-subrc }| ).
+        zcx_abapgit_exception=>raise_t100( ).
       ENDIF.
 
     ENDLOOP.
@@ -205,7 +237,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
 
   METHOD zif_abapgit_object~deserialize.
 
-    DATA: lt_sots    TYPE tty_sots,
+    DATA: lt_sots    TYPE ty_sots_tt,
           lt_objects TYPE sotr_objects,
           lv_object  LIKE LINE OF lt_objects.
 
@@ -243,8 +275,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
       LOOP AT <ls_sots>-entries ASSIGNING <ls_entry>.
 
         TRY.
-            <ls_entry>-text = mo_files->read_string( iv_extra = get_raw_text_filename( <ls_entry> )
-                                                     iv_ext   = 'txt' ).
+            <ls_entry>-text = mo_files->read_string(
+              iv_extra = get_raw_text_filename( <ls_entry> )
+              iv_ext   = 'txt' ).
 
           CATCH zcx_abapgit_exception.
             " Most probably file not found -> ignore
@@ -294,6 +327,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -315,34 +353,23 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    DATA: lv_object_name TYPE eu_lname,
-          lv_object_type TYPE seu_obj.
 
-    lv_object_name = ms_item-obj_name.
-    lv_object_type = ms_item-obj_type.
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS_REMOTE'
-      DESTINATION 'NONE'
-      EXPORTING
-        operation           = 'SHOW'
-        object_name         = lv_object_name
-        object_type         = lv_object_type
-      EXCEPTIONS
-        not_executed        = 1
-        invalid_object_type = 2
-        OTHERS              = 3.
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |Error from RS_TOOL_ACCESS Subrc={ sy-subrc }| ).
-    ENDIF.
-
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
-    DATA: lt_sots TYPE tty_sots.
+    DATA: lt_sots TYPE ty_sots_tt.
 
     FIELD-SYMBOLS: <ls_sots>  TYPE ty_sots,
                    <ls_entry> TYPE sotr_textl.
@@ -353,9 +380,10 @@ CLASS ZCL_ABAPGIT_OBJECT_SOTS IMPLEMENTATION.
 
       LOOP AT <ls_sots>-entries ASSIGNING <ls_entry>.
 
-        mo_files->add_string( iv_extra  = get_raw_text_filename( <ls_entry> )
-                              iv_ext    = 'txt'
-                              iv_string = <ls_entry>-text ).
+        mo_files->add_string(
+          iv_extra  = get_raw_text_filename( <ls_entry> )
+          iv_ext    = 'txt'
+          iv_string = <ls_entry>-text ).
 
         CLEAR: <ls_entry>-text.
 

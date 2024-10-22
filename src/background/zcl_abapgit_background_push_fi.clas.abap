@@ -32,7 +32,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_FI IMPLEMENTATION.
+CLASS zcl_abapgit_background_push_fi IMPLEMENTATION.
 
 
   METHOD build_comment.
@@ -54,9 +54,9 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_FI IMPLEMENTATION.
     IF lines( lt_objects ) = 1.
       rv_comment = |BG: { lv_str }|.
     ELSE.
-      rv_comment = 'BG: Multiple objects' ##NO_TEXT.
+      rv_comment = 'BG: Multiple objects'.
       LOOP AT lt_objects INTO lv_str.
-        CONCATENATE rv_comment zif_abapgit_definitions=>c_newline lv_str INTO rv_comment.
+        CONCATENATE rv_comment cl_abap_char_utilities=>newline lv_str INTO rv_comment.
       ENDLOOP.
     ENDIF.
 
@@ -65,7 +65,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_FI IMPLEMENTATION.
 
   METHOD push_fixed.
 
-    DATA: ls_comment TYPE zif_abapgit_definitions=>ty_comment,
+    DATA: ls_comment TYPE zif_abapgit_git_definitions=>ty_comment,
           ls_files   TYPE zif_abapgit_definitions=>ty_stage_files,
           lo_stage   TYPE REF TO zcl_abapgit_stage.
 
@@ -80,9 +80,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_FI IMPLEMENTATION.
     CREATE OBJECT lo_stage.
 
     LOOP AT ls_files-local ASSIGNING <ls_local>.
-      mi_log->add_info( |stage: {
-        <ls_local>-file-path } {
-        <ls_local>-file-filename }| ).
+      mi_log->add_info( |stage: { <ls_local>-file-path } { <ls_local>-file-filename }| ).
       lo_stage->add( iv_path     = <ls_local>-file-path
                      iv_filename = <ls_local>-file-filename
                      iv_data     = <ls_local>-file-data ).
@@ -90,9 +88,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_FI IMPLEMENTATION.
 
     LOOP AT ls_files-remote ASSIGNING <ls_remote>.
 
-      mi_log->add_info( |removed: {
-        <ls_remote>-path } {
-        <ls_remote>-filename }| ).
+      mi_log->add_info( |removed: { <ls_remote>-path } { <ls_remote>-filename }| ).
 
       lo_stage->rm( iv_path     = <ls_remote>-path
                     iv_filename = <ls_remote>-filename ).
@@ -111,7 +107,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_FI IMPLEMENTATION.
 
   METHOD zif_abapgit_background~get_description.
 
-    rv_description = 'Automatic push, fixed author' ##NO_TEXT.
+    rv_description = 'Automatic push, fixed author'.
 
   ENDMETHOD.
 

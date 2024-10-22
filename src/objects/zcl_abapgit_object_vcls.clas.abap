@@ -10,7 +10,7 @@ CLASS zcl_abapgit_object_vcls DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
     CONSTANTS c_cluster_type TYPE c VALUE 'C' ##NO_TEXT.
     CONSTANTS c_mode_insert TYPE obj_para-maint_mode VALUE 'I' ##NO_TEXT.
 
-    METHODS check_lock
+    METHODS is_locked
       IMPORTING
         !iv_tabname         TYPE tabname
         !iv_argument        TYPE seqg3-garg
@@ -22,10 +22,10 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
+CLASS zcl_abapgit_object_vcls IMPLEMENTATION.
 
 
-  METHOD check_lock.
+  METHOD is_locked.
 
     DATA:
       ls_rstable_key TYPE rstable, " Lock argument for table RSTABLE
@@ -46,7 +46,11 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown. " todo
+    SELECT SINGLE author FROM vcldir INTO rv_user
+      WHERE vclname = ms_item-obj_name.
+    IF sy-subrc <> 0.
+      rv_user = c_user_unknown.
+    ENDIF.
   ENDMETHOD.
 
 
@@ -63,6 +67,8 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
     DELETE FROM vclstruct WHERE vclname = lv_vclname. "#EC CI_NOFIRST "#EC CI_SUBRC
     DELETE FROM vclstrudep WHERE vclname = lv_vclname.    "#EC CI_SUBRC
     DELETE FROM vclmf WHERE vclname = lv_vclname.         "#EC CI_SUBRC
+
+    corr_insert( iv_package ).
 
   ENDMETHOD.
 
@@ -96,27 +102,10 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
         vclstrudep_tab = lt_vclstrudep
         vclmf_tab      = lt_vclmf.
 
-    CALL FUNCTION 'RS_CORR_INSERT'
-      EXPORTING
-        object              = ms_item-obj_name
-        object_class        = ms_item-obj_type
-        devclass            = iv_package
-        master_language     = mv_language
-        mode                = 'INSERT'
-        global_lock         = abap_true
-        suppress_dialog     = abap_true
-      EXCEPTIONS
-        cancelled           = 1
-        permission_failure  = 2
-        unknown_objectclass = 3
-        OTHERS              = 4.
-    IF sy-subrc = 1.
-      zcx_abapgit_exception=>raise( 'Cancelled' ).
-    ELSEIF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from RS_CORR_INSERT' ).
-    ENDIF.
+    corr_insert( iv_package ).
 
     lv_objectname = ls_vcldir_entry-vclname.
+
     CALL FUNCTION 'OBJ_GENERATE'
       EXPORTING
         iv_objectname         = lv_objectname
@@ -131,7 +120,7 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
         object_enqueue_failed = 5
         OTHERS                = 6.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error in OBJ_GENERATE for VCLS' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -154,6 +143,11 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -161,7 +155,6 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -172,12 +165,8 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
     SELECT SINGLE changedate INTO lv_changedate FROM vcldir
       WHERE vclname = ms_item-obj_name.
 
-    IF lv_changedate IS NOT INITIAL.
 * see logic in function module VIEWCLUSTER_GET_DEFINITION
-      rv_active = abap_true.
-    ELSE.
-      rv_active = abap_false.
-    ENDIF.
+    rv_active = boolc( lv_changedate IS NOT INITIAL ).
 
   ENDMETHOD.
 
@@ -188,16 +177,20 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
       lv_argument       TYPE seqg3-garg,
       lv_argument_langu TYPE seqg3-garg.
 
-    lv_argument       = me->ms_item-obj_name.
-    lv_argument_langu = |@{ me->ms_item-obj_name }|.
+    lv_argument       = ms_item-obj_name.
+    lv_argument_langu = |@{ ms_item-obj_name }|.
 
-    "Check all relevant maintein tabeles for view clusters
-    IF check_lock( iv_tabname = 'VCLDIR'    iv_argument = lv_argument ) = abap_true
-        OR check_lock( iv_tabname = 'VCLDIRT'   iv_argument = lv_argument_langu ) = abap_true
-        OR check_lock( iv_tabname = 'VCLSTRUC'  iv_argument = lv_argument )       = abap_true
-        OR check_lock( iv_tabname = 'VCLSTRUCT' iv_argument = lv_argument_langu ) = abap_true
-        OR check_lock( iv_tabname = 'VCLSTRUC'  iv_argument = lv_argument )       = abap_true
-        OR check_lock( iv_tabname = 'VCLMF'     iv_argument = lv_argument )       = abap_true.
+    "Check all relevant maintain tables for view clusters
+    IF is_locked( iv_tabname = 'VCLDIR'
+                  iv_argument = lv_argument ) = abap_true
+        OR is_locked( iv_tabname = 'VCLDIRT'
+                      iv_argument = lv_argument_langu ) = abap_true
+        OR is_locked( iv_tabname = 'VCLSTRUC'
+                      iv_argument = lv_argument )       = abap_true
+        OR is_locked( iv_tabname = 'VCLSTRUCT'
+                      iv_argument = lv_argument_langu ) = abap_true
+        OR is_locked( iv_tabname = 'VCLMF'
+                      iv_argument = lv_argument )       = abap_true.
 
       rv_is_locked = abap_true.
     ENDIF.
@@ -246,20 +239,22 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
     ls_bcdata-fval = '=CLSH'.
     APPEND ls_bcdata TO lt_bcdata.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SE54'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bcdata
-      EXCEPTIONS
-        OTHERS    = 1.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SE54'
+      it_bdcdata = lt_bcdata ).
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from ABAP4_CALL_TRANSACTION, SE35' ).
-    ENDIF.
+    rv_exit = abap_true.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -292,7 +287,7 @@ CLASS ZCL_ABAPGIT_OBJECT_VCLS IMPLEMENTATION.
         incomplete_viewcluster = 2
         OTHERS                 = 3.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error in VIEWCLUSTER_GET_DEFINITION' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     SORT lt_vclstrudep BY vclname object objfield.

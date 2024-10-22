@@ -27,6 +27,14 @@ CLASS zcl_abapgit_http_client DEFINITION PUBLIC CREATE PUBLIC.
                   iv_service TYPE string
         RAISING   zcx_abapgit_exception.
 
+    METHODS set_header
+      IMPORTING
+        iv_key   TYPE string
+        iv_value TYPE string
+      RAISING
+        zcx_abapgit_exception.
+
+  PROTECTED SECTION.
   PRIVATE SECTION.
     DATA: mi_client TYPE REF TO if_http_client,
           mo_digest TYPE REF TO zcl_abapgit_http_digest.
@@ -43,25 +51,35 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
     DATA: lv_code TYPE i,
           lv_text TYPE string.
 
-    mi_client->response->get_status(
-      IMPORTING
-        code   = lv_code ).
+    mi_client->response->get_status( IMPORTING code = lv_code ).
     CASE lv_code.
       WHEN 200.
-        RETURN.
+        RETURN. " Success, OK
       WHEN 302.
-        zcx_abapgit_exception=>raise( 'HTTP redirect, check URL' ).
+        zcx_abapgit_exception=>raise( 'Resource access temporarily redirected (HTTP 302). Check the URL' ).
       WHEN 401.
-        zcx_abapgit_exception=>raise( 'HTTP 401, unauthorized' ).
+        zcx_abapgit_exception=>raise( 'Unauthorized access to resource (HTTP 401). Check your credentials' ).
       WHEN 403.
-        zcx_abapgit_exception=>raise( 'HTTP 403, forbidden' ).
+        zcx_abapgit_exception=>raise( 'Access to resource forbidden (HTTP 403)' ).
       WHEN 404.
-        zcx_abapgit_exception=>raise( 'HTTP 404, not found' ).
+        zcx_abapgit_exception=>raise( 'Resource not found (HTTP 404). Check the URL' ).
+      WHEN 407.
+        zcx_abapgit_exception=>raise( 'Proxy authentication required (HTTP 407). Check your credentials' ).
+      WHEN 408.
+        zcx_abapgit_exception=>raise( 'Request timeout (HTTP 408)' ).
       WHEN 415.
-        zcx_abapgit_exception=>raise( 'HTTP 415, unsupported media type' ).
+        zcx_abapgit_exception=>raise( 'Unsupported media type (HTTP 415)' ).
+      WHEN 422.
+        zcx_abapgit_exception=>raise( 'Unprocessable entity (HTTP 422). Check, if URL has to end with ".git"' ).
+      WHEN 426.
+        zcx_abapgit_exception=>raise(
+            iv_text     = 'Upgrade Required (HTTP 426)'
+            iv_longtext = |The git server requires a different HTTP-protocol than which is sent. |
+                       && |abapGit uses HTTP/1.1 as default. |
+                       && |See more details in the abapGit online documentation.| ).
       WHEN OTHERS.
         lv_text = mi_client->response->get_cdata( ).
-        zcx_abapgit_exception=>raise( |HTTP error code: { lv_code }, { lv_text }| ).
+        zcx_abapgit_exception=>raise( |(HTTP { lv_code }) { lv_text }| ).
     ENDCASE.
 
   ENDMETHOD.
@@ -111,13 +129,22 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
           lv_code    TYPE i,
           lv_message TYPE string.
 
-    mi_client->send( ).
-    mi_client->receive(
+    mi_client->send(
       EXCEPTIONS
         http_communication_failure = 1
         http_invalid_state         = 2
         http_processing_failed     = 3
-        OTHERS                     = 4 ).
+        http_invalid_timeout       = 4
+        OTHERS                     = 5 ).
+
+    IF sy-subrc = 0.
+      mi_client->receive(
+        EXCEPTIONS
+          http_communication_failure = 1
+          http_invalid_state         = 2
+          http_processing_failed     = 3
+          OTHERS                     = 4 ).
+    ENDIF.
 
     IF sy-subrc <> 0.
       " in case of HTTP_COMMUNICATION_FAILURE
@@ -131,7 +158,7 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
           code    = lv_code
           message = lv_message ).
 
-      lv_text = |HTTP error { lv_code } occured: { lv_message }|.
+      lv_text = |HTTP error { lv_code } occurred: { lv_message }|.
 
       zcx_abapgit_exception=>raise( lv_text ).
     ENDIF.
@@ -156,6 +183,13 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD set_header.
+    mi_client->request->set_header_field(
+      name  = iv_key
+      value = iv_value ).
+  ENDMETHOD.
+
+
   METHOD set_headers.
 
     DATA: lv_value TYPE string.
@@ -174,16 +208,16 @@ CLASS zcl_abapgit_http_client IMPLEMENTATION.
         value = lv_value ).
 
     lv_value = 'application/x-git-'
-                  && iv_service && '-pack-request'.         "#EC NOTEXT
+                  && iv_service && '-pack-request'.
     mi_client->request->set_header_field(
         name  = 'Content-Type'
-        value = lv_value ).                                 "#EC NOTEXT
+        value = lv_value ).
 
     lv_value = 'application/x-git-'
-                  && iv_service && '-pack-result'.          "#EC NOTEXT
+                  && iv_service && '-pack-result'.
     mi_client->request->set_header_field(
         name  = 'Accept'
-        value = lv_value ).                                 "#EC NOTEXT
+        value = lv_value ).
 
     IF mo_digest IS BOUND.
       mo_digest->run( mi_client ).

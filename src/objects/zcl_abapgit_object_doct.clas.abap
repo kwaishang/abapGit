@@ -2,103 +2,78 @@ CLASS zcl_abapgit_object_doct DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
+
+    METHODS constructor
+      IMPORTING
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
-    CONSTANTS: c_id      TYPE dokhl-id VALUE 'TX',
-               c_typ     TYPE dokhl-typ VALUE 'E',
-               c_version TYPE dokhl-dokversion VALUE '0001',
-               c_name    TYPE string VALUE 'DOC'.
 
-    TYPES: BEGIN OF ty_data,
-             doctitle TYPE dsyst-doktitle,
-             head     TYPE thead,
-             lines    TYPE tline_tab,
-           END OF ty_data.
-
-    METHODS: read
-      RETURNING VALUE(rs_data) TYPE ty_data.
-
+    CONSTANTS c_id TYPE dokhl-id VALUE 'TX' ##NO_TEXT.
+    CONSTANTS c_name TYPE string VALUE 'DOC' ##NO_TEXT.
+    DATA mi_longtexts TYPE REF TO zif_abapgit_longtexts .
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_DOCT IMPLEMENTATION.
+CLASS zcl_abapgit_object_doct IMPLEMENTATION.
 
 
-  METHOD read.
+  METHOD constructor.
 
-    DATA: lv_object TYPE dokhl-object.
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
-
-    lv_object = ms_item-obj_name.
-
-    CALL FUNCTION 'DOCU_READ'
-      EXPORTING
-        id       = c_id
-        langu    = mv_language
-        object   = lv_object
-        typ      = c_typ
-        version  = c_version
-      IMPORTING
-        doktitle = rs_data-doctitle
-        head     = rs_data-head
-      TABLES
-        line     = rs_data-lines.
+    mi_longtexts = zcl_abapgit_factory=>get_longtexts( ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = read( )-head-tdluser.
+
+    rv_user = mi_longtexts->changed_by(
+                  iv_object_name = ms_item-obj_name
+                  iv_longtext_id = c_id ).
+
     IF rv_user IS INITIAL.
       rv_user = c_user_unknown.
     ENDIF.
+
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~delete.
 
-    DATA: lv_object TYPE dokhl-object.
+    mi_longtexts->delete(
+        iv_object_name = ms_item-obj_name
+        iv_longtext_id = c_id ).
 
-
-    lv_object = ms_item-obj_name.
-
-    CALL FUNCTION 'DOCU_DEL'
-      EXPORTING
-        id       = c_id
-        langu    = mv_language
-        object   = lv_object
-        typ      = c_typ
-      EXCEPTIONS
-        ret_code = 1
-        OTHERS   = 2.
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from DOCU_DEL' ).
-    ENDIF.
+    corr_insert( iv_package ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~deserialize.
 
-    DATA: ls_data TYPE ty_data.
-
-
-    io_xml->read( EXPORTING iv_name = c_name
-                  CHANGING cg_data = ls_data ).
-
-    CALL FUNCTION 'DOCU_UPDATE'
-      EXPORTING
-        head    = ls_data-head
-        state   = 'A'
-        typ     = c_typ
-        version = c_version
-      TABLES
-        line    = ls_data-lines.
+    mi_longtexts->deserialize(
+      iv_longtext_name = c_name
+      iv_object_name   = ms_item-obj_name
+      iv_longtext_id   = c_id
+      ii_xml           = io_xml
+      iv_main_language = mv_language ).
 
     tadir_insert( iv_package ).
+
+    corr_insert( iv_package ).
 
   ENDMETHOD.
 
@@ -113,7 +88,7 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCT IMPLEMENTATION.
 
     SELECT SINGLE id FROM dokil INTO lv_id
       WHERE id         = c_id
-        AND object     = lv_object.                     "#EC CI_GENBUFF
+        AND object     = lv_object.     "#EC CI_GENBUFF "#EC CI_NOORDER
 
     rv_bool = boolc( sy-subrc = 0 ).
 
@@ -121,6 +96,11 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCT IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -157,7 +137,7 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCT IMPLEMENTATION.
     " no standard function to do this. SE61 does this
     " directly in its dialog modules
     ls_dokentry-username = sy-uname.
-    ls_dokentry-langu    = sy-langu.
+    ls_dokentry-langu    = mv_language.
     ls_dokentry-class    = c_id.
     MODIFY dokentry FROM ls_dokentry.
 
@@ -176,41 +156,33 @@ CLASS ZCL_ABAPGIT_OBJECT_DOCT IMPLEMENTATION.
     ls_bcdata-fval = '=SHOW'.
     APPEND ls_bcdata TO lt_bcdata.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SE61'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bcdata
-      EXCEPTIONS
-        OTHERS    = 1.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SE61'
+      it_bdcdata = lt_bcdata ).
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from ABAP4_CALL_TRANSACTION, DOCT' ).
-    ENDIF.
+    rv_exit = abap_true.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
-    DATA: ls_data TYPE ty_data.
-
-
-    ls_data = read( ).
-
-    CLEAR: ls_data-head-tdfuser,
-           ls_data-head-tdfreles,
-           ls_data-head-tdfdate,
-           ls_data-head-tdftime,
-           ls_data-head-tdluser,
-           ls_data-head-tdlreles,
-           ls_data-head-tdldate,
-           ls_data-head-tdltime.
-
-    io_xml->add( iv_name = c_name
-                 ig_data = ls_data ).
+    mi_longtexts->serialize(
+        iv_longtext_name = c_name
+        iv_object_name = ms_item-obj_name
+        iv_longtext_id = c_id
+        io_i18n_params = mo_i18n_params
+        ii_xml         = io_xml ).
 
   ENDMETHOD.
 ENDCLASS.

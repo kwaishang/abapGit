@@ -6,16 +6,18 @@ CLASS zcl_abapgit_persistence_user DEFINITION
 
     INTERFACES zif_abapgit_persist_user .
 
-    TYPES tt_favorites TYPE zif_abapgit_persistence=>tt_repo_keys .
-
     CLASS-METHODS get_instance
       IMPORTING
-        !iv_user       TYPE xubname DEFAULT sy-uname
+        !iv_user       TYPE sy-uname DEFAULT sy-uname
       RETURNING
-        VALUE(ri_user) TYPE REF TO zif_abapgit_persist_user .
+        VALUE(ri_user) TYPE REF TO zif_abapgit_persist_user
+      RAISING
+        zcx_abapgit_exception .
     METHODS constructor
       IMPORTING
-        !iv_user TYPE xubname DEFAULT sy-uname .
+        !iv_user TYPE sy-uname DEFAULT sy-uname
+      RAISING
+        zcx_abapgit_exception .
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -23,24 +25,30 @@ CLASS zcl_abapgit_persistence_user DEFINITION
       BEGIN OF ty_repo_config,
         url              TYPE zif_abapgit_persistence=>ty_repo-url,
         login            TYPE string,
-        git_user         TYPE zif_abapgit_definitions=>ty_git_user,
+        git_user         TYPE zif_abapgit_git_definitions=>ty_git_user,
         last_change_seen TYPE string,
       END OF ty_repo_config .
     TYPES:
-      ty_repo_config_tt TYPE STANDARD TABLE OF ty_repo_config WITH DEFAULT KEY .
+      ty_repo_configs TYPE STANDARD TABLE OF ty_repo_config WITH DEFAULT KEY .
     TYPES:
       BEGIN OF ty_user,
-        default_git_user TYPE zif_abapgit_definitions=>ty_git_user,
+        default_git_user TYPE zif_abapgit_git_definitions=>ty_git_user,
         repo_show        TYPE zif_abapgit_persistence=>ty_repo-key,
         hide_files       TYPE abap_bool,
         changes_only     TYPE abap_bool,
+        order_by         TYPE string,
+        order_descending TYPE abap_bool,
+        diff_first       TYPE abap_bool,
         diff_unified     TYPE abap_bool,
-        favorites        TYPE tt_favorites,
-        repo_config      TYPE ty_repo_config_tt,
+        favorites        TYPE zif_abapgit_persist_user=>ty_favorites,
+        repo_config      TYPE ty_repo_configs,
         settings         TYPE zif_abapgit_definitions=>ty_s_user_settings,
+        show_folders     TYPE abap_bool,
+        list_settings    TYPE zif_abapgit_definitions=>ty_list_settings,
       END OF ty_user .
 
-    DATA mv_user TYPE xubname .
+    DATA mv_user TYPE sy-uname .
+    DATA ms_user TYPE ty_user.
     CLASS-DATA gi_current_user TYPE REF TO zif_abapgit_persist_user .
 
     METHODS from_xml
@@ -51,8 +59,6 @@ CLASS zcl_abapgit_persistence_user DEFINITION
       RAISING
         zcx_abapgit_exception .
     METHODS read
-      RETURNING
-        VALUE(rs_user) TYPE ty_user
       RAISING
         zcx_abapgit_exception .
     METHODS read_repo_config
@@ -68,8 +74,6 @@ CLASS zcl_abapgit_persistence_user DEFINITION
       RETURNING
         VALUE(rv_xml) TYPE string .
     METHODS update
-      IMPORTING
-        !is_user TYPE ty_user
       RAISING
         zcx_abapgit_exception .
     METHODS update_repo_config
@@ -82,11 +86,12 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
+CLASS zcl_abapgit_persistence_user IMPLEMENTATION.
 
 
   METHOD constructor.
     mv_user = iv_user.
+    read( ).
   ENDMETHOD.
 
 
@@ -103,7 +108,7 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
     CALL TRANSFORMATION id
       OPTIONS value_handling = 'accept_data_loss'
       SOURCE XML lv_xml
-      RESULT user = rs_user ##NO_TEXT.
+      RESULT user = rs_user.
   ENDMETHOD.
 
 
@@ -135,19 +140,15 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
         RETURN.
     ENDTRY.
 
-    rs_user = from_xml( lv_xml ).
+    ms_user = from_xml( lv_xml ).
 
   ENDMETHOD.
 
 
   METHOD read_repo_config.
-    DATA: lt_repo_config TYPE ty_repo_config_tt,
-          lv_key         TYPE string.
-
-    lv_key         = to_lower( iv_url ).
-    lt_repo_config = read( )-repo_config.
-    READ TABLE lt_repo_config INTO rs_repo_config WITH KEY url = lv_key.
-
+    DATA lv_url TYPE string.
+    lv_url = to_lower( iv_url ).
+    READ TABLE ms_user-repo_config INTO rs_repo_config WITH KEY url = lv_url.
   ENDMETHOD.
 
 
@@ -162,80 +163,108 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
     DATA: lv_xml TYPE string.
 
-    lv_xml = to_xml( is_user ).
+    lv_xml = to_xml( ms_user ).
 
     zcl_abapgit_persistence_db=>get_instance( )->modify(
       iv_type  = zcl_abapgit_persistence_db=>c_type_user
       iv_value = mv_user
       iv_data  = lv_xml ).
 
+    COMMIT WORK AND WAIT.
+
   ENDMETHOD.
 
 
   METHOD update_repo_config.
 
-    DATA: ls_user TYPE ty_user,
-          lv_key  TYPE string.
+    DATA: lv_key  TYPE string.
 
     FIELD-SYMBOLS <ls_repo_config> TYPE ty_repo_config.
 
-
-    ls_user = read( ).
     lv_key  = to_lower( iv_url ).
 
-    READ TABLE ls_user-repo_config ASSIGNING <ls_repo_config> WITH KEY url = lv_key.
+    READ TABLE ms_user-repo_config ASSIGNING <ls_repo_config> WITH KEY url = lv_key.
     IF sy-subrc IS NOT INITIAL.
-      APPEND INITIAL LINE TO ls_user-repo_config ASSIGNING <ls_repo_config>.
+      APPEND INITIAL LINE TO ms_user-repo_config ASSIGNING <ls_repo_config>.
     ENDIF.
     <ls_repo_config>     = is_repo_config.
     <ls_repo_config>-url = lv_key.
 
-    update( ls_user ).
-
-    COMMIT WORK AND WAIT.
+    update( ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_changes_only.
 
-    rv_changes_only = read( )-changes_only.
+    rv_changes_only = ms_user-changes_only.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_default_git_user_email.
 
-    rv_email = read( )-default_git_user-email.
+    rv_email = ms_user-default_git_user-email.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_default_git_user_name.
 
-    rv_username = read( )-default_git_user-name.
+    rv_username = ms_user-default_git_user-name.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_persist_user~get_diff_first.
+    rv_diff_first = ms_user-diff_first.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_diff_unified.
 
-    rv_diff_unified = read( )-diff_unified.
+    rv_diff_unified = ms_user-diff_unified.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_favorites.
 
-    rt_favorites = read( )-favorites.
+    rt_favorites = ms_user-favorites.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_hide_files.
 
-    rv_hide = read( )-hide_files.
+    rv_hide = ms_user-hide_files.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_persist_user~get_list_settings.
+
+    rs_list_settings = ms_user-list_settings.
+
+    IF rs_list_settings IS INITIAL.
+      " for performance reasons, set "only favorites" as a default
+      IF zcl_abapgit_repo_srv=>get_instance( )->list_favorites( ) IS NOT INITIAL.
+        rs_list_settings-only_favorites = abap_true.
+      ENDIF.
+
+      rs_list_settings-order_by = |NAME|.
+    ENDIF.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_persist_user~get_order_by.
+    rv_order_by = ms_user-order_by.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_persist_user~get_order_descending.
+    rv_order_descending = ms_user-order_descending.
   ENDMETHOD.
 
 
@@ -269,29 +298,43 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
   METHOD zif_abapgit_persist_user~get_repo_show.
 
-    rv_key = read( )-repo_show.
+    rv_key = ms_user-repo_show.
+
+    IF rv_key IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " Check if repo exists
+    TRY.
+        zcl_abapgit_persistence_db=>get_instance( )->read(
+          iv_type  = zcl_abapgit_persistence_db=>c_type_repo
+          iv_value = rv_key ).
+      CATCH zcx_abapgit_not_found.
+        " remove invalid key
+        CLEAR rv_key.
+        zif_abapgit_persist_user~set_repo_show( rv_key ).
+    ENDTRY.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~get_settings.
 
-    DATA: ls_user TYPE ty_user.
+    rs_user_settings = ms_user-settings.
 
-    ls_user = read( ).
+  ENDMETHOD.
 
-    rs_user_settings = ls_user-settings.
+
+  METHOD zif_abapgit_persist_user~get_show_folders.
+
+    rv_folders = ms_user-show_folders.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~is_favorite_repo.
 
-    DATA: lt_favorites TYPE tt_favorites.
-
-    lt_favorites = zif_abapgit_persist_user~get_favorites( ).
-
-    READ TABLE lt_favorites TRANSPORTING NO FIELDS
+    READ TABLE ms_user-favorites TRANSPORTING NO FIELDS
       WITH KEY table_line = iv_repo_key.
 
     rv_yes = boolc( sy-subrc = 0 ).
@@ -301,27 +344,44 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
   METHOD zif_abapgit_persist_user~set_default_git_user_email.
 
-    DATA: ls_user TYPE ty_user.
-
-
-    ls_user = read( ).
-    ls_user-default_git_user-email = iv_email.
-    update( ls_user ).
+    ms_user-default_git_user-email = iv_email.
+    update( ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~set_default_git_user_name.
 
-    DATA: ls_user TYPE ty_user.
+    ms_user-default_git_user-name = iv_username.
+    update( ).
+
+  ENDMETHOD.
 
 
-    ls_user = read( ).
+  METHOD zif_abapgit_persist_user~set_diff_first.
+    ms_user-diff_first = iv_diff_first.
+    update( ).
+    rv_diff_first = ms_user-diff_first.
+  ENDMETHOD.
 
-    ls_user-default_git_user-name = iv_username.
 
-    update( ls_user ).
+  METHOD zif_abapgit_persist_user~set_list_settings.
+    ms_user-list_settings = is_list_settings.
+    update( ).
+  ENDMETHOD.
 
+
+  METHOD zif_abapgit_persist_user~set_order_by.
+    ms_user-order_by = iv_order_by.
+    update( ).
+    rv_order_by = ms_user-order_by.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_persist_user~set_order_descending.
+    ms_user-order_descending = iv_order_descending.
+    update( ).
+    rv_order_descending = ms_user-order_descending.
   ENDMETHOD.
 
 
@@ -331,7 +391,8 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
     ls_repo_config                = read_repo_config( iv_url ).
     ls_repo_config-git_user-email = iv_email.
-    update_repo_config( iv_url = iv_url is_repo_config = ls_repo_config ).
+    update_repo_config( iv_url = iv_url
+                        is_repo_config = ls_repo_config ).
 
   ENDMETHOD.
 
@@ -342,7 +403,8 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
     ls_repo_config               = read_repo_config( iv_url ).
     ls_repo_config-git_user-name = iv_username.
-    update_repo_config( iv_url = iv_url is_repo_config = ls_repo_config ).
+    update_repo_config( iv_url = iv_url
+                        is_repo_config = ls_repo_config ).
 
   ENDMETHOD.
 
@@ -353,7 +415,8 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
     ls_repo_config                  = read_repo_config( iv_url ).
     ls_repo_config-last_change_seen = iv_version.
-    update_repo_config( iv_url = iv_url is_repo_config = ls_repo_config ).
+    update_repo_config( iv_url = iv_url
+                        is_repo_config = ls_repo_config ).
 
   ENDMETHOD.
 
@@ -364,93 +427,78 @@ CLASS ZCL_ABAPGIT_PERSISTENCE_USER IMPLEMENTATION.
 
     ls_repo_config       = read_repo_config( iv_url ).
     ls_repo_config-login = iv_login.
-    update_repo_config( iv_url = iv_url is_repo_config = ls_repo_config ).
+    update_repo_config( iv_url = iv_url
+                        is_repo_config = ls_repo_config ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~set_repo_show.
 
-    DATA: ls_user TYPE ty_user.
-
-
-    ls_user = read( ).
-    ls_user-repo_show = iv_key.
-    update( ls_user ).
-
-    COMMIT WORK AND WAIT.
+    ms_user-repo_show = iv_key.
+    update( ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~set_settings.
 
-    DATA: ls_user TYPE ty_user.
-
-    ls_user = read( ).
-    ls_user-settings = is_user_settings.
-    update( ls_user ).
+    ms_user-settings = is_user_settings.
+    update( ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~toggle_changes_only.
 
-    DATA ls_user TYPE ty_user.
+    ms_user-changes_only = boolc( ms_user-changes_only = abap_false ).
+    update( ).
 
-    ls_user = read( ).
-    ls_user-changes_only = boolc( ls_user-changes_only = abap_false ).
-    update( ls_user ).
-
-    rv_changes_only = ls_user-changes_only.
+    rv_changes_only = ms_user-changes_only.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~toggle_diff_unified.
 
-    DATA ls_user TYPE ty_user.
+    ms_user-diff_unified = boolc( ms_user-diff_unified = abap_false ).
+    update( ).
 
-    ls_user = read( ).
-    ls_user-diff_unified = boolc( ls_user-diff_unified = abap_false ).
-    update( ls_user ).
-
-    rv_diff_unified = ls_user-diff_unified.
+    rv_diff_unified = ms_user-diff_unified.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~toggle_favorite.
 
-    DATA: ls_user TYPE ty_user.
-
-    ls_user = read( ).
-
-    READ TABLE ls_user-favorites TRANSPORTING NO FIELDS
+    READ TABLE ms_user-favorites TRANSPORTING NO FIELDS
       WITH KEY table_line = iv_repo_key.
 
     IF sy-subrc = 0.
-      DELETE ls_user-favorites INDEX sy-tabix.
+      DELETE ms_user-favorites INDEX sy-tabix.
     ELSE.
-      APPEND iv_repo_key TO ls_user-favorites.
+      APPEND iv_repo_key TO ms_user-favorites.
     ENDIF.
 
-    update( ls_user ).
-
-    COMMIT WORK AND WAIT.
+    update( ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_persist_user~toggle_hide_files.
 
-    DATA ls_user TYPE ty_user.
+    ms_user-hide_files = boolc( ms_user-hide_files = abap_false ).
+    update( ).
 
-    ls_user = read( ).
-    ls_user-hide_files = boolc( ls_user-hide_files = abap_false ).
-    update( ls_user ).
+    rv_hide = ms_user-hide_files.
 
-    rv_hide = ls_user-hide_files.
+  ENDMETHOD.
 
+
+  METHOD zif_abapgit_persist_user~toggle_show_folders.
+    ms_user-show_folders = boolc( ms_user-show_folders = abap_false ).
+    update( ).
+
+    rv_folders = ms_user-show_folders.
   ENDMETHOD.
 ENDCLASS.

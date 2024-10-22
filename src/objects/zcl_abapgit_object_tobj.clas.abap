@@ -2,8 +2,6 @@ CLASS zcl_abapgit_object_tobj DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     TYPES: BEGIN OF ty_tobj,
@@ -22,7 +20,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
+CLASS zcl_abapgit_object_tobj IMPLEMENTATION.
 
 
   METHOD delete_extra.
@@ -39,9 +37,10 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
     SELECT SINGLE * FROM tddat INTO rs_tobj-tddat WHERE tabname = iv_tabname.
 
     SELECT SINGLE * FROM tvdir INTO rs_tobj-tvdir WHERE tabname = iv_tabname.
-    CLEAR: rs_tobj-tvdir-gendate, rs_tobj-tvdir-gentime.
+    CLEAR: rs_tobj-tvdir-gendate, rs_tobj-tvdir-gentime, rs_tobj-tvdir-devclass.
 
-    SELECT * FROM tvimf INTO TABLE rs_tobj-tvimf WHERE tabname = iv_tabname.
+    SELECT * FROM tvimf INTO TABLE rs_tobj-tvimf WHERE tabname = iv_tabname
+      ORDER BY PRIMARY KEY.
 
   ENDMETHOD.
 
@@ -63,7 +62,9 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
                                         event   = <ls_tvimf>-event
                                TRANSPORTING NO FIELDS.
       IF sy-subrc <> 0.
-        DELETE tvimf FROM <ls_tvimf>.
+        DELETE FROM tvimf
+          WHERE tabname = <ls_tvimf>-tabname
+          AND event = <ls_tvimf>-event.
       ENDIF.
     ENDLOOP.
 
@@ -97,8 +98,13 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
     ls_objh-objectname = ms_item-obj_name(lv_type_pos).
     ls_objh-objecttype = ms_item-obj_name+lv_type_pos.
 
+    IF ls_objh-objecttype = 'L'.
+      zcx_abapgit_exception=>raise( |Use transaction SOBJ to delete transport objects { ls_objh-objectname }| ).
+    ENDIF.
+
     CALL FUNCTION 'OBJ_GENERATE'
       EXPORTING
+        iv_korrnum            = iv_transport
         iv_objectname         = ls_objh-objectname
         iv_objecttype         = ls_objh-objecttype
         iv_maint_mode         = 'D'
@@ -110,7 +116,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
         object_enqueue_failed = 5
         OTHERS                = 6.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from OBJ_GENERATE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     delete_extra( ls_objh-objectname ).
@@ -141,6 +147,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
 
     CALL FUNCTION 'OBJ_GENERATE'
       EXPORTING
+        iv_korrnum            = iv_transport
         iv_objectname         = ls_objh-objectname
         iv_objecttype         = ls_objh-objecttype
         iv_maint_mode         = 'I'
@@ -161,7 +168,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
     IF sy-subrc <> 0.
 * TOBJ has to be saved/generated after the DDIC tables have been
 * activated - fixed with late deserialization
-      zcx_abapgit_exception=>raise( 'error from OBJ_GENERATE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     CALL FUNCTION 'OBJ_SET_IMPORTABLE'
@@ -176,7 +183,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
         object_enqueue_failed = 4
         OTHERS                = 5.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from OBJ_SET_IMPORTABLE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
 * fm OBJ_GENERATE takes the defaults from the DDIC object
@@ -190,6 +197,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
                   CHANGING cg_data = ls_tobj ).
     ls_tobj-tvdir-gendate = sy-datum.
     ls_tobj-tvdir-gentime = sy-uzeit.
+    ls_tobj-tvdir-devclass = iv_package.
 
     update_extra( ls_tobj ).
 
@@ -216,6 +224,11 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-late TO rt_steps.
   ENDMETHOD.
@@ -223,8 +236,6 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-late_deser = abap_true.
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -253,11 +264,18 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
         jump_not_possible = 1
         OTHERS            = 2.
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( |Jump not possible. Subrc={ sy-subrc } |
-                                 && |from TR_OBJECT_JUMP_TO_TOOL| ).
-    ENDIF.
+    rv_exit = boolc( sy-subrc = 0 ).
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -298,11 +316,15 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
     IF sy-subrc = 1.
       RETURN.
     ELSEIF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from CTO_OBJECT_GET' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     CLEAR: ls_objh-luser,
            ls_objh-ldate.
+
+    SORT lt_objs BY objectname objecttype tabname.
+    SORT lt_objsl BY objectname objecttype trwcount.
+    SORT lt_objm BY objectname objecttype method.
 
     io_xml->add( iv_name = 'OBJH'
                  ig_data = ls_objh ).
@@ -316,6 +338,12 @@ CLASS ZCL_ABAPGIT_OBJECT_TOBJ IMPLEMENTATION.
                  ig_data = lt_objm ).
 
     ls_tobj = read_extra( ls_objh-objectname ).
+
+    IF ls_tobj-tvdir-detail = ``.
+      " to prevent xslt serialization error,
+      " force clear if numc field is empty
+      CLEAR ls_tobj-tvdir-detail.
+    ENDIF.
 
     io_xml->add( iv_name = 'TOBJ'
                  ig_data = ls_tobj ).

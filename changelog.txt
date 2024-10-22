@@ -8,6 +8,1162 @@ Legend
 + : added
 - : removed
 
+2024-07-01 v1.129.0
+-------------------
+
++ DEVC,NSPC: Serialize software component for add-ons (#6891)
++ Where-used page (#6897)
++ CDBO: Customer Data Browser Object (#6930)
++ VIEW: Add authorization group to serialize and deserialize (#6918)
++ Exclude files from remote (#6942)
++ Read-only support for SXSD - Classic BAdI definition (#6958)
+* Change message if local packages got lost (#6905)
+* SOTS: Remove from TADIR selection (#6906)
+* Fix bug in "Object to Files" Page. (#6908)
+* DEVC: Fix "Package must be assigned to the software component LOCAL" (#6912)
+* Improve error message for SUSH objects not being supported. (#6916)
+* Use bcp47 language code for AFF (#6915)
+* Suppress popup when using background API (#6926)
+* Fix Issue Encountered on "Data Config" Page. (#6913)
+* Bugfix, new pull page: decide package warnings (#6932)
+* Set Character Limit for "Table" Field in Data Config page (#6934)
+* ENHO: workaround dump during serialization (#6935)
+* HOOK: catch exception (#6937)
+* Sync UI theme in dark mode (#6940)
+* Set Default Git User Details  (#6920)
+* Small performance improvement in folder logic (#6941)
+* Fix folder logic buffer (#6945)
+* Fix yank mode - copy to clipboad (#6946)
+* Data serializer: fix carriage return problem (#6957)
+* TABL: Clear DBINCLEXCL and DBSYSSELx fields (#6960)
+
+2024-04-05 v1.128.0
+-------------------
+
+! Make HTTP/1.1 new default in abapGit (#6902)
+! Distinguish between "Global Settings" and "Repository Settings" (#6759)
++ Add support for DRTY - CDS Type (#6767)
++ Add support for DTEB - CDS Entity Buffer (#6769)
++ Add "ignore sub-packages" option to package export (#6815)
++ HTTP connection check and improved error messages (#6806)
++ UIPG, UIST: Add support for Launchpad Page and Space Templates (#6873)
++ ENHO/ENHS: Add missing longtexts (#6890)
+* Fix typos and adjust comments (#6778, #6779, #6780, #6783, #6785, #6786m #6858, #6864)
+* User exit: include settings parameters in change_tadir() (#6775)
+* Remove Duplicate Entries in Command Palette (#6763)
+* Ignore macOS "Desktop Services Store" files (#6787)
+* Fix ABAP Language Version Handling for Repository Setting "Any" for AFF Object Types (#6793)
+* Fix bug in Command Palette (#6799)
+* DIAL: Prefill package popup (#6805)
+* XSLT: Add check for correct EOL separator (#6803)
+* Update the text "Submit Query" in the Command Palette. (#6810)
+* CLAS/INTF-SYNTAX_CHECK: Suppress status message (#6812)
+* Improve error messages when checking branches/tags (#6814)
+* Improve form validation of text fields (#6813)
+* Fix bug in Personal settings page (#6818)
+* Fix Navigation Issue in "Config Display" and "Config Edit" pages. (#6820)
+* Fix Filter Application Bug (#6824)
+* Change transport type when setting original system (#6816)
+* FORM: Fix existence check (#6832)
+* Apack: fix namespace problem (#6841)
+* Remove duplicate labels from Command Palette. (#6821)
+* IDOC: Fix MOVE_TO_LIT_NOTALLOWED_NODATA (#6852)
+* SICF: Include alternate service name (#6853)
+* Apack: additional namespace case (#6851)
+* SFPI: exists() also look for inactive objects (#6867)
+* Code inspector pages improvements (#6862)
+* AFF: deserialize translation files (#6830)
+* Fix Unexpected Functionality for "Maximum Length of Comment" Field (#6871)
+* Avoid popup on exit after saving remote settings (#6875)
+* Fix Hint for "Maximum Length of Comment" Field (#6877)
+* Fix changing transport type when setting original system (#6870)
+* Limit Package Name to 30 characters (#6889)
+* Item graph: performance (#6885)
+* Add specific error message for 426 http error (#6901)
+
+2024-01-24 v1.127.0
+-------------------
+
++ Flow Page (beta, https://docs.abapgit.org/user-guide/reference/flow.html)
++ Repo List: Make labels clickable (#6651)
++ Support short/long timestamps in field rules (#6666)
++ Add "Ignore" option for ABAP Language Version (#6663)
++ Add some stats for DB view (#6675)
++ Remember last used folder (#6677)
++ Debug info: Show exits coded in exit super class (#6708)
++ New feature: Original system (#6715)
+* Prevent calls to exit implementations in tests (#6653)
+* Disable superfluous check for offline repos (#6662)
+* Fix filename for export to ZIP (#6664, #6665)
+* DDLX: Set "Changed At" and "Changed By" (#6661)
+* Fix home and back again (#6670)
+* Debug page: open external links in new window (#6671)
+* Fix running multiple instances of abapGit (#6679)
+* CLAS: Fix deserializing child exception classes (#6682)
+* IOBJ: Fix uninstall (#6685)
+* TABU: Fix staging in background process (#6683)
+* TABU: Fix deserializing data config (#6684)
+* Check for ABAP language version during serialize (#6681)
+* TSTC select, ABAP Cloud/Steampunk compatibility (#6695)
+* Fix ABAP language version check (#6693)
+* CLAS: Avoid popups in lower releases (#6709)
+* FUGR: Fix check if include belong to function grp (#6711)
+* Add object type to error message (#6714)
+* Fix abapGit popups external call (#6716)
+* Refresh repository to reduce memory usage in background mode (#6728)
+* Remove exception when deleting files (#6729)
+* Do a syntax check before accessing version constant (#6733)
+* Avoid loss of log during background processing (#6736)
+* Fix APACK issues (#6743)
+* DDLS: deletes remaining TADIR entry during delete (#6745)
+* Fix: Cannot change repo settings without version constant (#6753)
+* Create package popup: Fix prefill package name (#6752)
+* BG: Ensure auth buffer is cleared even in error case (#6756)
+* Fix empty JSON file for AFF based objects (#6766)
+
+2023-11-16 v1.126.0
+-------------------
+
+! Add ABAP Language Version to repo settings (experimental feature) (#6476,#6484,#6486,#6487,#6488,#6525,#6603)
+! IAMU v2: Serialize MIMEs as separate file + fixes (#6515)
+! SRVB: Clear metadata links (#6550)
+! Change the order of popups on pull; first check prerequisites and dependencies (#6613)
+! Add "name" to repository settings (#6633,#6634,#6635,#6637)
++ Add option to remove all objects but keep repository (#6499)
++ Diff View: Collapse/expand all diffs (#6511)
++ Add back button to DB page (#6521)
++ unit test page: add re-run button (#6533)
++ Improve unit test page (#6543)
++ DB edit+display page: add back button (#6545)
++ Add exit to adjust rfc server group for parallel serialization (#6503)
++ Implement changed_by for several objects (#6554)
++ Repo View: Shorten URL display (#6555)
++ Pass repo metadata to adjust_display_filename exit (#6556)
++ Improve Backup (#6617)
++ Enhance repo labels (#6442)
+* Repo view: Fix display of original system (#6478)
+* Consider filter at zcl_abapgit_repo_status=>calculate (#6480)
+* Escape display name for javascript repo catalog (#6482)
+* Remove test data container variants on pull that do not exist on the remote (#6493)
+* ECTD: Fix diff after import based on sort order (#6494)
+* CMPT: Remove redundant and admin fields from XML (#6502)
+* Fix dump in when using namespaced package for repo (#6500)
+* Do not assign T packages to a transport request (#6506)
+* Fix command palette default form action with edge (#6508)
+* Fix link hints for radio buttons with edge control (#6509)
+* Fix unit tests in zcl_abapgit_abap_language_vers (#6516)
+* SFxx: Fix missing lock checks and unlocking (#6519)
+* Diff: Fix refresh of single file (#6524)
+* CUS2: Add missing tadir and transport entries (#6527)
+* CMPT: Fix missing transport entry on deletion (#6526) 
+* Fix ignoring sub-packages when adding offline repo (#6538)
+* TOBJ: Serialization shows diffs on an HANA database (#6547)
+* Fix 'determine_max_processes' for disabled Parallel Processing and Merged abapGit (#6559)
+* PROG, FUGR: Fix handling of inactive code (#6557)
+* TABL: Drop secondary indexes on pull (#6578)
+* PR ENUM: fix for private repos (#6592)
+* Add version constant back to repo settings (#6596)
+* zlib performance optimizations (#6597)
+* FUGR: Fix import of template screens (#6582)
+* Show object type in activation log (#6611)
+* Fix "Open in Main Language" if language is not installed (#6610)
+* APACK: Manifest interface in sub-package (#6614)
+* SSFO: Fix order of T_CAPTION data (#6609)
+* Fix dump restoring abapGit backup (#6621)
+* Fix typo in "orange" label (#6622)
+* Sort pull request popup (#6623)
+* SAP GUI for HTML: Fix dialog buttons (#6566)
+* APACK: Allow overwriting missing dependencies (#6612)
+* INTF: Fix file format feature switch (#6628)
+* Fix text field when switching to offline (#6632)
+* Fix APACK for namespaces (#6639)
+* Fix deletion/uninstall when using local settings (#6640)
+* Fix APACK performance (#6649)
+
+2023-09-06 v1.125.0
+-------------------
+
++ Include deletions in "Transport to Branch" (#6291)
++ Persist repository list settings (#6295)
++ Repo view: Show icon for different original language (#6297)
++ Added auto-confirmation of transport messages (#6317)
++ EEEC: Enable object handler for Event Consumption Model (#6348)
++ Separate translations from XML, PO files (#6189)
++ Unit test page result: show syntax errors (#6308)
++ SOD1/2: Add support for API Package & API Package Assignment (#6352)
++ Enhance experimental features (#6393)
++ SKTD: Knowledge Transfer Document (#6400)
++ APIS: API Release State (#6403)
++ IWOM/IWPR/TRAN: Implement changed_by (#6411)
++ Add online/offline filter option for repo list (#6449)
+* Don't dump for unknown frontend (#6302)
+* IDOC, TABL: Set released and closed status (#6306)
+* Fix is_dirty check for Repo Settings (#6309)
+* Unit test page: don't show SAUNIT_NO_TEST_CLASS err (#6310)
+* Fixed links to new documentation (#6319)
+* Fix "Data" page: On back go back (#6322)
+* OO serializer: skip includes not found (#6324)
+* Bugfix, dump GETWA_NOT_ASSIGNED (#6325)
+* Fix syntax error insert report ... version (#6327)
+* Fix syntax error in zcl_abapgit_file_deserialize (#6328)
+* Fix dialog exit (#6326)
+* Fix GUI actions for Edge browser control (#6336)
+* Fix processing of TABU entries in case of multiple tables (#6338)
+* Fix Code Inspector jump (#6343)
+* Fix hotkeys for edge browser control (#6344)
+* Handling unsupported objects in deserialize process (#6320)
+* ALV: steampunk syntax compatibility (#6381)
+* Fix description handling (#6384)
+* TABU: Update entries with same key but different component values (#6380)
+* Clarify minimum version (#6391)
+* Fix potential crash in background mode (#6392)
+* TABU: Fix deserializing data (#6394)
+* Fix update of checksums on pull (#6395)
+* Fix unit test page if there are no unit tests (#6397)
+* Fix edge control (#6401)
+* DRUL: fix changed_by() (#6402)
+* SOD1/2: Check for support and add changed_by (#6404)
+* Improve confusing progress message (seemingly always 200 objects) (#6432)
+* Improve performance of push for large repos (#6390)
+* Fix runtime error in zcl_abapgit_abap_language_vers (#6427)
+* Fix Syntax Check warnings regarding secondary keys (#6435)
+* DSYS: Fix error for objects containing / in name (#6431)
+* Clarify error messages about folder logic (#6447)
++ Unit Test List subpackages (#6445)
+* CLAS/INTF: Fix seocompotx during deserialization (#6457) 
+* Apply filter after TADIR selection (#6462)
+* Fix dump in ZCL_ABAPGIT_GIT_PACK=>DECODE (#6468)
+
+2023-05-15 v1.124.0
+-------------------
+
++ Improve "Advanced > Unit Tests" (#6213)
++ Improve copy&paste on diff page (#6218)
++ Add debug option to show href-links on hover (#6239)
++ FUGR,CLAS: Enhance "jump to" (#6250)
++ New UserExit at REPO TOOLBAR for adding custom repo settings (#6249)
++ Add warning banner if wrong browser control is used (#6260)
++ NSPC: Automatic creation of namespaces (#6210)
++ Add GUI and HTML control info to page footer (#6261)
++ FUGR, CLAS: Enhance "changed by" (#6274)
+* Fix checksums on pull with new objects (#6211)
+* Check repo package against namespace (#6212)
+* SHI3 translation serialization fix (#6214, #6217)
+* Avoid remote connection for uninstalling repo (#6219)
+* run unit page: fix back button (#6223)
+* Fix xstring conversion on non-Unicode systems (#6237)
+* Improve deletion of OTR texts (#6228)
+* ECATT: Avoid diffs between dialog and background (#6240)
+* Fix unhandled exception in SRVB (#6246)
+* DEVC: Clear TPCLASS (#6251)
+* NROB: clear admin fields (#6255, #6280)
+* INTF, WEBI: Hide objects generated by proxy (SPRX) (#6259)
+* Fix for namespace check when there are multiple namespaces within a repo (#6263)
+* Run unit tests: Fallback to code inspector (#6264)
+* fix dump in `zcl_abapgit_data_utils` while getting key fields (#6269)
+* Fix dump related to exit implementations (#6268)
+* fix dump, IS_CUSTOMIZING_TABLE (#6272)
+* Add fallback for ADT transport link (#6283)
+
+2023-04-06 v1.123.0
+-------------------
+
++ New user exit: change allowed object types (#6173)
++ LXE: Support more objects (#6144)
++ Show performance metrics for long-running ops (#6148)
++ AQBG support - ABAP Query: User group (#6155)
++ GSMP Object Handler (#6159)
++ AQSG support - ABAP Query: InfoSet (#6161)
++ AQQU support - ABAP Query (#6165)
++ SICF: Add missing error pages (#6145)
++ Pull enabled for customizing tables (#6138)
++ AQSG, AQQU: Add jump to object (#6184)
++ CLAS: Serialize long texts for exception classes (#6186)
++ TABU: Add customizing request to local settings (#6191)
++ Add runtime measurement to Unit Test page (#6196)
+* CLAS: Fix variable name (#6127)
+* Fix check for unsaved data in local settings (#6139)
+* DEVC: Fix error handling (#6141)
+* Improve pull dialog: Usability (#6137)
+* Fix namespace check for AFF (#6146)
+* data: throw error if hitting max (#6157)
+* Improve error handling for password_dialog (#6163)
+* Fix detection of inactive objects (#6167)
+* Improve pull dialog button logic (#6169)
+* USE_LXE settings and serialization of selected languages (in old format) (#6168)
+
+2023-03-03 v1.122.0
+-------------------
+
++ Better pull dialog, Screen status (#6093)
++ Improve visualization of tags (#6098)
++ Visualize when experimental features are enabled (#6050)
++ Enhance login popup (#6022)
++ New user-exit for validating before pushing into remote (#6013)
+* Fix ITAB_DUPLICATE_KEY dump during deserialize (#6121)
+* PROG: assign authorization group during report creation (#6117)
+* CLAS: Fix error when changing redefinitions (#6102)
+* Fix tag deletion (#6095)
+* Fix zip diff command visibility (#6087)
+* CUS0/CUS0 add SORT to avoid diffs (#6088)
+* SHIx: Fix application component hierarchy issues (#6065)
+* Prevent dump if too many requests are selected (#6064)
+* Fix hotkeys repo list (#6062)
+* Fix error handling in "Stage by Transport" (#6060)
+* Fix highlighting in case of back quotes (#6059)
+* Escape output for plain text highlighter (#6058)
+* TABL: Fix activation of secondary indexes (#6055)
+* Fix hotkeys in repo view (#6054)
+* CLAS: Fix recording of changes in transport (#6047)
+* SFBF, SFBS, SFSW: Major bug fixes (#6020)
+* Data: clear in case of errors (#6014)
+* Delete, fix dump (#6011)
+
+2023-01-25 v1.121.0
+-------------------
+
++ Repo View: Activate objects (#5994)
++ Repo View: Selectively add objects on pull (#5985)
++ Pull log: Include object counts (#5982)
++ Debug Info: Display of Deserialization Step (#5988)
++ TABU: add option to skip initial values/columns (#5922)
++ Repo View: Consolidate "Pull" and "Selective Pull" (#5951)
+* TOBJ: Improve error messages (#6007)
+* PDTS: Fix recording in transport (#6000)
+* SAPC: Fix uninstall errors (#6001)
+* SHLP: Avoid double activation (#5999)
+* DOMA: Fix domains with custom conversion exit (#5998)
+* XSLT: Avoid double activation (#5995)
+* Uninstall log: Show only if there are errors (#5996)
+* DRUL: Fix compatibility with lower releases (#5991)
+* TABL,VIEW: Simplify deserialize (#5989)
+* Fix Diff: Ignore comment edge cases (#5984)
+* Pull log: Show deletion of unnecessary objects (#5974)
+* SMIM: Record deletion of objects in transport (#5975)
+* Page diff/patch: Follow-up for small files (#5976)
+* Fix syntax highlight for XML, CSS, JS (#5971)
+* Fix menus with many items (#5972)
+* Fix "duplicate file error" during pull (#5968)
+* TABU: No error when table not yet exists (#5964)
+* Prevent pull in case of duplicate files (#5952)
+* Page diff/patch: Fix dump for small files/diffs (#5956)
+* Table comparison: add guard clause to prevent long runtimes (#5954)
+
+2022-12-15 v1.120.0
+-------------------
+
++ Add "Sponsor us" to page footer (#5882) 
++ New Online/Offline: Add labels form input (#5888)
++ Page repo: add patch function (#5896)
++ Page code inspector: add actions to command palette (#5899)
++ Add label F4 value help (#5891) 
++ Local settings: add F4 value help for check varint (#5910)
++ All/none label filter (#5911)
++ Copy (yank) link texts with y+LinkHints (#5915)
++ Set transport request in local repo settings or user exit (#5916)
++ Repo View: Fallback to main if branch doesn't exist (#5925)
++ Export object page: allow exporting list of objs (#5936)
++ Add status message after pulls (#5947)
++ Add "ignore sub-packages" option for offline repos (#5948)
+* TOBJ: Deletion of logical transport objects (#5873)
+* Fix type for data config serialize (#5880) 
+* Fix Git connection if submodules are present (#5883) 
+* Disable 'FocusFilter'-Hotkey if command palette is visible (#5887) 
+* Fix initial focus for link hints (#5892)
+* Fix command palette form submit (#5893)
+* Repo View: Fix cross-out for menu items (#5890)
+* Repo View: Consolidate "Stage" and "Force Stage" (#5889) 
+* Enable Command Palette for radio buttons (#5894) 
+* Fix file to object mapping (#5902) 
+* Fix JS init error on Diff/Patch page (#5901) 
+* Repo Settings: Fix dump in 702 (#5906)
+* Command pallette: remove duplicate header links (#5909)
+* Fix detection of SAP GUI for Windows (#5913)
+* Diff/Patch: Improve beacons (#5914, #5918, #5933)
+* Improve repository URL validation (#5927)
+* UI: Fix dark theme buttons for Chrome (#5931)
+* DOCV,SAMC,SAPC,STYL: Add missing transport entry (#5935)
+* AFF: Add NONT and RONT to registry (#5934)
+* PRAG: Fix locking and transport entries (#5939)
+* DB Util: Fix error saving non-XML data (#5940)
+* ENHO: Fix error deserializing enhancements (#5943)
+
+2022-11-14 v1.119.0
+-------------------
+
++ VIEW: Add translation support (#5806)
++ SMBC: Business Configuration Maintenance Objects (#5812)
++ UI: Add hint for "icon scaling" setting (#5819)
++ Local organization/grouping/labeling of repos (#5814)
++ Repo overview: Add labels and links to command palette (#5861)
++ Add "Show Hotkeys" to Help Menu (#5863)
++ AFF: New object RONT - SAP Object Type (#5862)
++ AFF: New object NONT - SAP Object Type Node (#5866)
++ Repo view: Render labels (#5864)
+* AFF: Fix existence check (#5803)
+* ENHO: Unlock objects in cases of errors (#5811)
+* CLAS,ENHO: Fix inactive enhancements (#5810)
+* AFF with namespaces (#5779)
+* Disable "experimental" feature for stand-alone version (#5828)
+* Skip Project piece list request (#5834)
+* CLAS,INTF: Catch runtime error during update (#5841)
+* Reset sort order to ascending in repo overview (#5840)
+* DOCV: Add object to tadir and transports (#5845)
+* Improve error message for where-used list update (#5849)
+* Fix syntax highlighting for xml and html (#5851)
+* Fix "Unexpected package naming" error (#5805)
+* DOCV: Fix dump for namespaced documents (#5855)
+* Repo overview page, Polishing (#5859)
+
+2022-10-04 v1.118.0
+-------------------
+
+! W3xx: Remove unnecessary metadata (#5780)
+! Change build deployment filename (#5792)
+  File is now named "zabapgit_standalone.prog.abap" and located
+  in a clonable repo at https://github.com/abapGit/build
+! Several XML formats have been enhanced to support object
+  documentation (longtexts)
++ Allow use of changelog feature without APACK (#5739)
++ Prepare processing longtexts for sub components (#5786)
++ Various objects: Add documentation (longtexts) (#5796)
++ CLAS,INTF: Support for component documentation (#5575)
++ FUGR: Add documentation (longtexts) (#5795)
+* Delete obsolete longtexts on pull (#5751)
+* Force usage of local object handler classes (#5778)
+* CLAS: Fix pull for deleted interface methods (#5768)
+* TABL: Fix deserialize if foreign key exists (#5773)
+
+2022-09-19 v1.117.0
+-------------------
+
+! Removal of some unused code currently does not work automatically (#5578):
+  Edit class zcl_abapgit_popups` and remove method zif_abapgit_popups~branch_popup_callback manually
+! CLAS and INTF xml file changes: Cleared object name and added descriptions for sub-components
+! SOTR: Fix handling of alias names (#5750)
+- Remove unused branch popup (#5742)
++ AFF: Allow object handler to serialize JSON via experimental feature (#5660)
++ Skipping serialization for ignored objects (#5648)
++ IWSG: implement CHANGED_BY (#5680)
++ Improve package / sub-package check (#5628)
++ New Object EVTB - Event Binding - based on AFF (#5707)
++ Data serialization, add WHERE condition based on transport (#5720)
++ Add page for running unit tests (#5719)
++ Export object page: add setting for only main language (#5735)
++ New SOBJ - Business Object Type - serializer (#5724)
++ G4xx, IWxx: Changed by (#5747)
++ Add uninstall option to repository overview (#5753)
++ CLAS,INTF: Add missing shorttexts (#5755)
+* CLAS: Avoid duplicate key error (#5663)
+* AFF: Get data for serialization from the DB (#5670)
+* Repo view: Fix "View > Changes only" for offline (#5641)
+* Exception handling small improvement (#5691)
+* AFF: Custom AJSON filter for INTF serialization (#5675)
+* AFF: More detailed error msg (#5709)
+* Improvements for CHK* classes (#5712)
+* Deal with empty active version (object was never activated) (#5714)
+* AFF: deserialize INTF metadata as JSON (#5704)
+* zlib/deflate decompression, bugfix (#5723)
+* Advanced dropdown: add separators (#5717)
+* Fix language conversion, now 7.02 compatible (#5727)
+* Fix some background colors (#5716)
+* Fix regression in non-Unicode systems (#5732)
+* Check logon language during uninstall (#5731)
+* Fixed "Add via Transport" short keys (#5736)
+* DEVC: Fix dump if package has been delete (#5741)
+* Fix dump when deleting repo with DB utility (#5740)
+* WDYN: Fix dump if no components exist (#5749)
+* SCVI: Sort tables to avoid diffs (#5745)
+* W3XX: Sort parameters to avoid diffs (#5746)
+* SUSH,SUSC: Fix deletion (#5748)
+* DSYS: Simplify namespace split (#5757)
+* DOCV: Handle namespaces (#5756)
+
+2022-06-29 v1.116.0
+-------------------
+
+! Changes to exception class: Update abapGit using stand-alone versions to avoid dumps
+! FUGR: Better maintenance view auto comments cleanups (#5622)
+- Remove "branch overview" class/interface (#5503)
++ IOBJ, ODSO: Add jump (#5495)
++ FDT0: Add check of local/transportable apps (#5561)
++ Repo view: Show icon for different source system (#5514)
++ Repo view: Source system for packages/namespace (#5587)
++ Show installation flavour in footer (#5604)
++ CLAS: Add exposure to workflow class attributes (#5603)
++ Support direct longtexts in exceptions (#5592)
++ New Offline: Auto create package if non-existing (#5634)
++ DDLX: implement changed_by (#5655)
+* Fix syntax error in BW jump (#5498)
+* Fix status calculation (#5500)
+* Fix ignore count in repo statistics (#5505)
+* DEVC: Clean-up OTR entries (#5507)
+* G4BA,G4BS: Clear/fill user and timestamp fields (#5519)
+* SPRX: Add objects to transport (#5521)
+* WDYN: Add documentation and fix diffs (#5490)
+* OTGR: Fix errors with parent/child (#5518)
+* UENO: Clear/fill user, date, and time fields (#5520)
+* OTGR: Downport (#5532)
+* Fix "DB delete failed" (#5517)
+* Fix commit message encoding (#5508)
+* Fix "DB delete failed" (#5534)
+* AMSD: Fix "Step DDIC is only for DDIC objects" (#5539)
+* AVAS,CHDO,DDLS,SPRX: Add objects to transport (#5542)
+* Improve error handling during activation phase (#5506)
+* UDMO: Fix wrong parameter value (#5540)
+* ENHC: Fix diffs due to OTR (#5538)
+* DDIC: Improve active/inactive check (#5486)
+* ASFC,SPLO,SPPF: Fix missing transport entry (#5541)
+* SHI3: Fix exists check (#5546)
+* IAxx: Fix locking of objects (#5545)
+* IOBJ/ODSO: Fix errors if objects exist already (#5551)
+* CHDO: Fix deletion of TADIR entries (#5555)
+* Improve error message for language mismatch (#5544)
+* SSFO: Avoid side-effect in is_active (#5564)
+* Fix tag popup message (#5567)
+* CHAR: take only serialize main language into accou (#5566)
+* Repo view: fix "order by transport" dump (#5571)
+* Fix syntax error in systems with BW (#5572)
+* PINF: Fix error when changing packages (#5560)
+* Uninstall: Fix order for dependencies (#5559)
+* Repo stats: don't count lines of ignored files (#5576)
+* SICF: Display object name in upper case (#5547)
+* Fix dump ASSERTION_FAILED during table content deserialization (#5586)
+* Fix dump for repos using data tables (#5581)
+* CLAS: Add to deletion transport (#5563)
+* MSAG: Exclude Translation Object Detective language (#5596)
+* Fix object deletions not working (#5594)
+* LXE: Downport (#5597)
+* INTF,CLAS,PROG,DTEL,DOMA,TABL: Exclude technical language (#5598)
+* UI: Create Tag (#5591)
+* Repo view: Source system not part of item sig (#5599)
+* INTF: Add to deletion transport and fix locking (#5562)
+* INTF: Remove syntax warning (#5607)
+* DSYS: Fix exceptions (#5608)
+* AFF: Fix exception handling (#5609)
+* SOTR: Fix uninstall (#5558)
+* Fix dump when switching repo to offline (#5613)
+* W3xx: Replace call with TADIR_INSERT (#5618)
+* UI: Message box improvements (#5616)
+* Adjust screen element naming (#5625)
+* Add authorization exit on startup (#5630)
+* Fix variant maintainance for abapGit report (#5627)
+* IWOM/IWMO: Clear object metadata (#5635)
+* IWPR/IWSV: Clear metadata fields (#5637)
+* Propagate codepage conversion errors (#5638)
+* IWVB: Clear metadata fields (#5647)
+* Diff: Properly show diffs for whitespace (#5643)
+* Fix repo settings dialog (#5649)
+* LinkHints: enable radio button (#5656)
+* Downport: GUI HTML Viewer (#5664)
+* SSST: Suppress list output for warnings (#5666)
+* BDEF: Fix dump when pulling repo (#5661)
+* Improve folder logic popup (#5662)
+
+2022-04-28 v1.115.0
+-------------------
+
+! Rework checksums (#5328)
+  Recommendations:
+  1) Backup abapGit (Tools > Database Utility > Backup)
+  2) Update stand-alone and developer versions at the same time
+! Introduce interface zif_abapgit_repo (#5329)
+  You might have to adjust API calls to abapGit
+! Repo View: show paths below object name (#5323)
+- Remove "Branch Overview" page (#5428)
+- Remove "Tag Overview" popup (#5463)
+- Remove popup for XML version mismatch (#5403)
++ Support for ABAP file format
++ Add "Stage by Transport"
++ CHKO: object calling AFF Framework (#5163)
++ AIFC: additional interface validation checks (#5267)
++ UI: Center Popups (#5274)
++ Forms: Minimum text field length (#5287)
++ Visualize difference for EOF (#5404)
++ README: Support Ukraine (#5407)
++ Add support for folder logic "mixed" (#5413)
++ Check if package name is allowed (#5416)
++ Add transport for deletions in generic serializer (#5434)
++ TABU: Add "jump" to SE16 (#5459)
+* TOBJ: Fix xslt serialization dump (#5247)
+* Save additional repo view settings (#5257)
+* ENHO,SFPF: Use correct transport (#5258)
+* Repo View: 'Order by path' considers object name (#5261)
+* Adjust diff algorithm (#5251)
+* Correct task name parallel processing (#5269)
+* Fix lost remote on favorite refresh (#5277)
+* Fix status for new sub-packages (#5278)
+* Avoid double deserialize of text symbols (#5273)
+* Set window title for log viewer (#5300)
+* WAPA: Fix repeated pull of BSP page (Fiori) (#5310)
+* DOMA: Fix serialize of translations (#5304)
+* TABL: Properly show inactive objects (#5303)
+* Add refresh after pull errors (#5312)
+* SICF: clear ICFALIASNO (#5338)
+* Persist "show folder view" option (#5343)
+* SRVB: Fix for Service Binding  (#5344)
+* Improve progress bar and log for pull (#5311)
+* FUGR: Sort includes (#5352)
+* DTEL: REF TO DATA for DDIC element support (#5350)
+* Jump: Switch execution order - first specific then generic (#5357)
+* Don't fail if a dictionary object is activated with warnings (#5362)
+* SOTS: Fix dump in case of lower case language code (#5381)
+* Fix DDIC errors related to ref to class/interface (#5369)
+* TTYP: Fix pull/activate table type ref to data type (#5384)
+* CLAS/INTF: Fix serialize/deserialize of documentation (#5374)
+* WEBI: Sort tables (#5390)
+* SRVD: Update zcl_abapgit_object_srvd.clas.abap (#5395)
+* SRVB: Fix uncaught exception (#5398)
+* Repo List: Fix sort (#5397)
+* Fix deserialize order (#5399)
+* DDLX: Delete before DDLS (#5414)
+* UENO: Fix diff related to release (#5422)
+* Record objects in transports (#5419)
+* ENHC,ENHS,ENSC,SPRX,TRAN: Fix "dynpro_send_in_background" (#5430)
+* Fix deserialize textpool for some objects (#5417)
+* DDLS: Avoid dump and show error (#5437)
+* CUS1: Fix jump (#5447)
+* CHDO: Avoid double pull and fix uninstall (#5439)
+* UI: Prefill transport popup (#5438)
+* Record objects in transports (#5435)
+* UI: Word-wrap long filenames in repo/stage views (#5424)
+* DOMA: Deletion of domains with append (#5445)
+* DEVC: Raise error for main/structure packages (#5444)
+* Improve LXE error handling (#5440)
+* UI: Fix escaping of textarea input (#5456)
+* Improve JSON syntax highlighter (#5450)
+* DEVC: Fix DYNPRO_SEND_IN_BACKGROUND (#5461)
+* Avoid logon when comparing with remote (#5458)
+* DDLS: Clear ABAP language version (#5474)
+* DDLX: Clear ABAP language version (#5476)
+* FUGR: Fix diff of includes (#5489)
+* DTDC: Support ABAP 2208 (#5478)
+! Create empty classes/interfaces before DDIC (#5393)
+* Fix user/password for background mode (#5488)
+* IWSG: Clear metadata fields (#5464)
+* Properly ignore files during deserialize (#5427)
+* SPRX: Fix suppress_dialog error (#5491)
+
+2022-01-03 v1.114.0
+-------------------
++ AIFC object support
++ Add user exit for adjusting display of filenames
++ Add user exit for serialize postprocess
+! Refactoring: Prioritization/sequence of deserialization
+! Performance optimiziation, parallel mode
+* Commit page, option to hide author fields
+* Fix vimium links
+* Fix "remove" button for data tables
+* Webgui fixes
+* Downport clipboard_export
+* DDLX/SMTG: Raise exception
+* Always use active version for DOCU CL
+* Requirements dependency check
+* W3xx avoid diffs of parameters
+* Repo View, improive view with folders
+* Adjust usage of transport in object classes
+
+2021-11-26 v1.113.0
+-------------------
+! SRVB serialization changes
+! Commit page: limit comment input length
+! Repo View: remove file pathin folder view
+! TABL: Expand before PUT
+! FUGR: check the serialized include belongs to the same FUGR
++ Patch/Diff page, new view options
++ Patch/diff: add "filter by object type"
++ Create new branch for commit
+* Add DRUL and DTDC to mass activation
+* add form actions to command palette
+* fix icon hover in repo bar
+* Zip import, show error log
+* SHI3, deserialization set buffer mode field
+* Performance optimization with namespaced objects
+* WEBI: fix changed_by, is_active, exists
+
+2021-11-03 v1.112.0
+-------------------
+! Only show favorites on startup
+! UI: sticky top
+! Commit Page refactored
+* FUGR: strip generator comments
+* SUSH: Fix check for lock
+* PROG: remove obsolete screens
+* New hot keys for remote settings page
+* Better multi language handling for text pools
+* Bugfix, checking namespace
+* FUGR/PROG: Dynpro keep text in case of masking
+* Bugfix, binary file detection
+* Repo View: switch "path" and "Changed by" columns
+* Measure backend render time
+* XSLT: Fix activation error
+* Enable command palette for diff/patch/stage
+* WDCA: add support for appl. config content
+* Online repo: copy URL to clipboard
+* Log viewer - hide empty columns
+* Fix pull on package reassign
+* Default font changed to "72"
+* Add pull and diff buttons to main page
+* FUGR, better serialization performance
+* SXCI: inactive classic Badis bugfix
+* SMIM: implement last changed by
+* WDCC: bugfix lower releases
+* XSLT: change to late activation
+
+2021-10-01 v1.111.0
+-------------------
++ WDCC: Support all object types
+! SICF: clear counter in xml
+! FUGR/PROG: dynpro, clear TEXT when referring to dictionary
+* diff view: improve beacons
+
+2021-09-24 v1.110.0
+-------------------
+! DOMA: Clear DOMNAME from fixed values
+! TABL: Clear DD05M-LENG
+! ENHO: split abap code into separate files
+! SUSH: Clear metadata
++ add icon for changing remote repo in list
++ add "last changed by" to repo page
++ SPPF support
+* password popup: add comment regarding github tokens
+* javaGUI, workaround for trailing null values
+* fix "cannot switch origin twice" in repo settings
+* filter code inspector/syntax check, skip generated maintenance screens
+* DDLS: fix dump in lower releases
+* SRFC: improvements
+* Rename "Reset Local" to "Selective Pull"
+* user exit: Post processing option for custom class serializer
+
+2021-08-16 v1.109.0
+-------------------
+! Default width changed
+! Enhance "Force Pull" to become "Selective Pull"
++ "only my changes" option added to diff page
++ Add user exit for event handlers
++ Offline Repo: Compare via RFC feature
+* Avoid duplicates in data serialize
+* Enhanced error handling for git transport protocol
+* Release serialization resources, less memory usage
+* Regenerate profile SAP_ALL after import of SUSO
+* DEVC: application component for local interfaces
+* Create branch: add existence check
+* Git transport: fix status report for GitLab and Bitbucket
+* FTGL: update transport when deleting
+* Focus HTML control on abapGit startup
+* WDCA: clear parameter descriptions
+* TABL: Clear DB indexname
+* EVCO: fix empty XML error
+* More keyboard shortcusts for main page
+* WEBI: Improve error handling
+* SMTG: Implement changed_by
+* Auto creation of package during new online
+
+2021-05-09 v1.108.0
+-------------------
+! INTF deserialization changed
+! SRVD file format changed
+! limit size of branch overview
++ write protected icon in repository overview added
++ enable switching from stage screen
++ hover highlight in toolbar
++ new remote tab in repo settings
+* Fix for Java GUI so new repo can be defined
+* bugfix, saving proxy bypass
+* PDTS refactoring
+* Background mode refactored to HTML form
+* git transport: error on empty git reply
+* DCLS changed_by implemented
+* accept remote without HEAD
+* fix dump in case of package name conflicts
+* Fix processing for files with &nbsp;
+* ENHx change order for deserialize
+* show table data in overview(experimental)
+* catch send errors in HTTP client
+* SOTS uninstall with usage reference
+* TLOCK performance fixes, when finding transport numbers
+* warning added if namespace is not modifiable
+* ENHC fix error when updating object
+* PROG deserialization refactored and inactive code fixed
+
+2021-03-22 v1.107.0
+-------------------
+! Change DDIC activation mode
+! DDIC, error when no active vesion found
++ User exit: wall messages
++ User exit: Strip XML details
+* CLAS, fix several issues related to class includes
+* Respect wildcard characters in proxy bypass settings
+* AVAR, bugfix, unlock after deserialize
+* DEVC, bugfix, unlock after error
+* ENHO, bugfix "file emxxx not found"
+* allow switching branches in write protected repos
+* Popup refactoring to HTML
+
+2021-02-28 v1.106.0
+-------------------
+! TABL, serialization changed, fields TABNAME, DDLANGUAGE, POSITION cleared
++ Overview page, performance optimizations
+- Install abapgit option removed from debug page
+* Parsing git branch list, throw errors
+* ACID, avoid "no changes found" popup
+* W3xx, remove TADIR entry on uninstall
+* DEVC, fix check if package is emtpy
+* SICF, fix regression
+* fix sapevents for chromium based browser control
+* SICF, regression fix
+* SHI3, serialize only main language
+* Fix display of log after uninstall
+* XSLT, unlock in case of errors
+* SUSH, raise error if not supported
+* PARA, unlock in case of errors
+* Background logic, continue in case of errors
+* WDCC, fix dump during serialization
+
+2021-01-27 v1.105.0
+-------------------
+! handling of namespaces changed
+! BDEF handler adjustments
++ new handler for SUSH
++ Refresh button added to stage page
++ Automatic creation of top repository package
+* raise error if package is not part of package hierarchy
+* SHI5 add to transport
+* ENxx fix errors when uninstalling
+* reduce memory consumption during deserialize
+* DDLS fix dump during serialization
+* ENHC add last changed by
+* fix dump when switching to PR
+* W3xx add object to transport on uninstall
+* Uninstall ENQU before TABL
+* prevent staging of duplicate files
+* AVAR remove tadir on uninstall
+* allow repo names with dots
+* TABL, set default ROWORCOLST on deserialize
+
+2020-12-28 v1.104.0
+-------------------
++ ui, new pages for global and personal settings
++ ENHO: Implement missing deserialize for WDYC
++ Check objects when installing into main package
++ Checkout commit: additional user interface
+! log object refactoring
+* better abapGit package structure
+* CLIF, improve error message
+* PINF, missing transport entry
+* TRAN, improve error messages
+* DOMA, fix serialize for missing translations
+* Fix dump when using abapGit for more than 50 navigation steps
+* PROG: Fix transport and work area
+* SOTS: Get changed by
+* SMIM, improve error message
+* DSYS, get changed by
+* Fix master language only, duplicate entries for shi3 objects
+* WDYN, improve error message
+* VIEW: Fix deserialize of maintenance views
+* Serialise only main language for ENHS and ENHO objects
+* fix creation of TR entries for uninstalled PROGs
+* Fix sorting of objects in repo view
+* TABL: No structure comparison for global temp tables
+* Implement jump for CUS1
+* Implement jump for CUS0
+
+2020-11-22 v1.103.0
+-------------------
+! DDLS file format changes, newline
+! VIEW file format changes, less data
++ Support jump for SHI3
++ Support jump for SHI5
+* New help buttons in new online/offline forms
+* Better error handling for uninstall
+* Documentation updates
+
+2020-11-12 v1.102.0
+-------------------
++ Backup and restore for abapGit persistency
++ Retreive transport and changed by for deletions
+! Trigger main command when pressing enter in form
+! DDLS, uninstall even if references exists
+! DEVC, remove obsolete TADIR during uninstall
+* Sort "switch origin" by PR number
+* Workaround for special characters in password dialog
+* adjust rendering of transport, usernames
+* PROG: remove inactive sources during uninstall
++ Diff page, option to toggle hidden characters
+* Optimize order of uninstalling objects
+* Terminology, inclusive language changes
+
+2020-11-02 v1.101.0
+-------------------
++ add user exit for commit display URL
++ Checkout specific commit
++ add offline repo refactored to HTML form
+! Remove remaining 2FA objects
+! Include inactive objects in show changes only
+! Set validity of default transport to one day
+! Change escape key to work like back
+* SFPF, clear CACHE_INFO
+* use HEAD symres as default branch
+* SHMA: auto generate
+* XSLT, fix activation sequence
+* Remove dynamic instantiation of ZCL_ABAPGIT_MESSAGE_HELPER
+* Refactoring, remove additional ALIASes
+* HTML event refactoring
+* Downports
+* ABAP syntax highligting additional keywords
+* DEVC, clear obsolete fields
+* TABL, skip data check for GTT
+* SOTR, remove system id
+* TABL, fix exists check
+* UI: unify rendering of branch, package, transport, user names
+* Fix DDIC activation issues
+
+2020-10-01 v1.100.0
+-------------------
++ CMOD support
++ PDTS support
++ WDCA support
++ AVAR support
++ Add option to synchronize theme with frontend
+* documentation fixes
+* downport
+* Fix error from CL_PACKAGE_FACTORY=>LOAD_PACKAGE3
+* Fix deserialize of TABL with foreign keys
+
+2020-09-22 v1.99.2
+------------------
+- Start removing GitHub 2FA implementation
+* fixes and harmonizes during startup
+* fix deletion of branches
+* Enhance result view of Code Inspector/Syntax Check
+* PROG, program class added to deserialization
+* SHI3 serialization and deserialization fixes
+* Performance improved during deserialize
+* Fix sort by created in repo overview
+* Split up global settings button
+* Refactoring, XML interfaces, HTML interfaces, event abstraction
+* Downport
+
+2020-09-03 v1.99.1
+------------------
+! exception class updated, might require update via ZABAPGIT_STANDALONE
+! restart abapGit in case of self update
+* OTGR enable parentes again
+* fix filename encoding of < and >
+* class parsing, show line number causing error
+* refactoring
+
+2020-08-27 v1.99.0
+------------------
++ New functionality for switching between PRs for github
++ WDCC support
++ OTGR support
+! PROG,FUGR,ENHO workaround for leading spaces removed
+* Improved staging robustness
+* TABL add authorization group handling
+* TABL add translations
+* Improved branch messaging
+* DSYS serialization fixes
+* SHMA fix last changed by
+* Remember repo list filter
+* DOMA fix translations
+* Downport
+* Various performance optimizations
+* DCLS/DDLS fix uninstall sequence
+* Improve display when there are no changes in repo view
+* Add success messages for repo removal/uninstall
+* background pull: always overwrite all objects
+
+2020-07-21 v1.98.0
+------------------
++ repository creation form as HTML
++ add action column to repo overview
+! general support for changelogs
+* fixes faulty handling of post data
+* fix user setting containing invalid repo key
+* fix after removing/uninstall repo
+* fixes for dark theme
+* missing objects in overwrite confirmation popup
+* TRAN add variant tranaction
+* dark theme fixes
+* improved error message when uninstalling DDIC objects
+* HTML GUI fixes
+* fixes for special characters in file names
+* IOBJ remove number ranges during delete
+* Uninstall resolve DDIC dependencies of VIEW
+* PARA dequeue after deletion
+* TOBJ format changes, package cleared
+
+2020-06-29 v1.97.0
+------------------
++ repository overview as main page
++ Generic possibility for changelog news
++ handling import of cyclic DDIC objects
+! removed default for commit comment
+! raise exception when no .abapgit.xml is found
+* fix incorrect status of ignored files in repo view
+* url validation fixes
+* WDYN UI sort
+* DSYS downport and changes
+* SCP1 import order
+* downport
+* clear ICFSERVICE-ICFBITMAP
+* W3MI record to transport
+* general refactoring
+
+2020-06-10 v1.96.0
+------------------
+* "last changed by" will show unknown instead of blank
++ hover line highlighting
+! staging will show error instead of dump in special cases
+* fix related to textpools of includes
+* various changes regarding only serializing main language
+! GUI refactoring
++ New syntax highlighters CSS + JS + JSON
+* downports
+* proxy bypass settings maintenance fix
+! WDA SORT text fixes
++ User exit for deserialize postprocess
+* Fix dumps regarding PINF deserialization
+* Enahnced object list for debug info
+! TADIR serialization logic changes
+
+2020-05-21 v1.95.0
+------------------
+* apack interface serialization changes
+* gui refactoring
++ SCVI screen variants support
++ STVI transaction variant support
++ OA2P support
++ SRVB support
++ BDEF support
++ ASMD support
++ SRVD support
++ DRUL support
++ DTDC support
+! CUS0, CUS1, CUS2 only serialize main language
+! DTEL, DOCT, only serialize main language
+* CHAR serialization fixes
++ Allow setting of display name for offline repos
+- Remove page playground
+- Remove explore link, link to dotabap.org instead
+
+2020-03-29 v1.94.0
+------------------
+* refactoring, remove macros
+* fix stage of IWMO, IWSG, IWSV3
+* SHI5 fixes
+! Patch UI enhancements
+* DOCU master language fixes
++ New option to bypass proxy
+* Fix dump for non-existing package
+* FUGR proper error messages for RFC parameters
++ CHDO support
+* SRFC clear fields
+* TRAN fix cinfo and authorization objects
++ AREA support
++ highlight XML code
+* DOMA skip domain appends
+
+2020-02-01 v1.93.0
+------------------
+! byte order mark added in serialized XML files on non-unicode systems
+* macro refactorings
+* ignore not supported objects during lock check
+* FUGR do not unconditionally add T00 include
++ ODSO support
+* DOCT consider all versions
+* handle spaces in stage filter
+* IOBJ refactoring/cleanup
+* IOBJ support enhancement
+* MSAG order by primary key
++ Class text element translations
+* IOBJ downport
+* Fix activation error IARP/IASP
+* Jump for IWMO, IWPR, IWSV IWVB
+* Skip application variants, VARX in transport handling
+
+2019-12-05 v1.92.0
+------------------
+! handling of redefined protected methods
+* downport
+* show duplicate object names
+* ITAU exception handling
++ IWVB support
++ IOBJ support
+* additional checking of URLs when creating online repo
+* author regex
+* TABL popup being closed fixed
+* Preparations for DOMA clearing value
++ Code selection by colum on diff screen
++ add adt links on diff page
+
+2019-10-31 v1.91.0
+------------------
+! FUGR serialization changed, RSFDO-INDEX cleared
+* FORM serialization fixes
++ SCP1, add support for sets of sets
++ Support for baseinfo string, DDLS
++ Possibility to export with only master language
+* Better error messages
++ SMTG support
++ IAXU support
++ FTGL support
+* Fix for program names containing "="
++ Tooltips with hotkeys
+* User interface enhancements
+
+2019-10-07 v1.90.0
+------------------
+* FUGR, fix transport request recording
+* AUTH jump fix
+* Cancel branch creation if already exists
+* Progress indicator fixes for belize theme
+* ecatt, show error instead of dumping
+* optimize skip logic
+! increase parallel serialization timeout
+* Workaround for JavaGUI
++ Column sorting in repo overview
+* APACK fixes
++ PERS serialization
++ Command palette, shortcut F1
++ Syntax check, rerun button added
+* Footer redesign
++ UENO serialization
+* PERS downport
+* DDLS write transport entry
+* NROB write transport entry
++ Order by on repo page
+* Warning when languages does not match
+* CLAS serialization, fix redefinition shortdump
+
+2019-08-05 v1.89.0
+------------------
++ belize and dark themes
+* ADT jump for package link and transports
++ additional gateway support
+* consistent sort ordering of files
+* misc fixes for dynpros
+* show error when pushing to protected branch
+* show log for offline install
++ FUGR serialization of text pool
++ new error GUI
+
+2019-06-22 v1.88.0
+------------------
+* parallel serialization, show errors
+* fix diff filter
+* downport
+! allow abapGit to run in production/qa
+* fix jump for VIEW and TOBJ
+* fix author regex
+! improved logging
++ odata v4 supported
+* WEBI overwrite
++ ui themes support
+! transport to zip, umutiple transport requests
+* fixes for TADIR handling
+
 2019-04-28 v1.87.0
 ------------------
 + HIDPI icon scaling, enable in settings
@@ -411,7 +1567,7 @@ Legend
 * fix error messages
 * more downport
 * INTF clear more fields
-+ user exit to modify http client, eg SSO between SAP systems 
++ user exit to modify http client, eg SSO between SAP systems
 
 2018-03-14 v1.60.1
 ------------------
@@ -488,7 +1644,7 @@ Legend
 ------------------
 * minor fixes for tags
 * downport
-* fix serilization of SXCI in background mode
+* fix serialization of SXCI in background mode
 
 2018-01-03 v1.51.0
 ------------------
@@ -699,7 +1855,7 @@ Legend
 ------------------
 + WAPA support
 + display abapGit changelog in abapGit
-* bugfix nested namespace folders 
+* bugfix nested namespace folders
 
 2017-03-24 v1.33.3
 ------------------

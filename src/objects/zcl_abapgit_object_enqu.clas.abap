@@ -1,18 +1,22 @@
-CLASS zcl_abapgit_object_enqu DEFINITION PUBLIC INHERITING FROM zcl_abapgit_objects_super FINAL.
+CLASS zcl_abapgit_object_enqu DEFINITION
+  PUBLIC
+  INHERITING FROM zcl_abapgit_objects_super
+  FINAL
+  CREATE PUBLIC .
 
   PUBLIC SECTION.
-    INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
+
+    INTERFACES zif_abapgit_object .
   PROTECTED SECTION.
   PRIVATE SECTION.
-    TYPES: tyt_dd27p TYPE STANDARD TABLE OF dd27p WITH DEFAULT KEY.
-    METHODS _clear_dd27p_fields CHANGING ct_dd27p TYPE tyt_dd27p.
+    TYPES: ty_dd27p TYPE STANDARD TABLE OF dd27p WITH DEFAULT KEY.
+    METHODS _clear_dd27p_fields CHANGING ct_dd27p TYPE ty_dd27p.
 
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
+CLASS zcl_abapgit_object_enqu IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
@@ -31,24 +35,11 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
 
   METHOD zif_abapgit_object~delete.
 
-    DATA: lv_objname TYPE rsedd0-ddobjname.
-
-
-    lv_objname = ms_item-obj_name.
-
-    CALL FUNCTION 'RS_DD_DELETE_OBJ'
-      EXPORTING
-        no_ask               = abap_true
-        objname              = lv_objname
-        objtype              = 'L'
-      EXCEPTIONS
-        not_executed         = 1
-        object_not_found     = 2
-        object_not_specified = 3
-        permission_failure   = 4.
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from RS_DD_DELETE_OBJ, ENQU' ).
+    IF zif_abapgit_object~exists( ) = abap_false.
+      RETURN.
     ENDIF.
+
+    delete_ddic( 'L' ).
 
   ENDMETHOD.
 
@@ -58,7 +49,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
     DATA: lv_name  TYPE ddobjname,
           ls_dd25v TYPE dd25v,
           lt_dd26e TYPE TABLE OF dd26e,
-          lt_dd27p TYPE tyt_dd27p.
+          lt_dd27p TYPE ty_dd27p.
 
 
     io_xml->read( EXPORTING iv_name = 'DD25V'
@@ -68,7 +59,8 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
     io_xml->read( EXPORTING iv_name = 'DD27P_TABLE'
                   CHANGING cg_data = lt_dd27p ).
 
-    corr_insert( iv_package = iv_package iv_object_class = 'DICT' ).
+    corr_insert( iv_package = iv_package
+                 ig_object_class = 'DICT' ).
 
     lv_name = ms_item-obj_name.
 
@@ -87,7 +79,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
         put_refused       = 5
         OTHERS            = 6.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from DDIF_ENQU_PUT' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     zcl_abapgit_objects_activation=>add_item( ms_item ).
@@ -99,17 +91,19 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
 
     DATA: lv_viewname TYPE dd25l-viewname.
 
-
     SELECT SINGLE viewname FROM dd25l INTO lv_viewname
-      WHERE viewname = ms_item-obj_name
-      AND as4local = 'A'
-      AND as4vers = '0000'.
+      WHERE viewname = ms_item-obj_name.
     rv_bool = boolc( sy-subrc = 0 ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -121,7 +115,6 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-ddic = abap_true.
   ENDMETHOD.
 
 
@@ -138,19 +131,27 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECT=>JUMP
+  ENDMETHOD.
 
-    jump_se11( iv_radio = 'RSRD1-ENQU'
-               iv_field = 'RSRD1-ENQU_VAL' ).
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
     DATA: lv_name  TYPE ddobjname,
+          lv_state TYPE ddgotstate,
           ls_dd25v TYPE dd25v,
           lt_dd26e TYPE TABLE OF dd26e,
-          lt_dd27p TYPE tyt_dd27p.
+          lt_dd27p TYPE ty_dd27p.
 
     lv_name = ms_item-obj_name.
 
@@ -160,6 +161,7 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
         state         = 'A'
         langu         = mv_language
       IMPORTING
+        gotstate      = lv_state
         dd25v_wa      = ls_dd25v
       TABLES
         dd26e_tab     = lt_dd26e
@@ -168,10 +170,11 @@ CLASS ZCL_ABAPGIT_OBJECT_ENQU IMPLEMENTATION.
         illegal_input = 1
         OTHERS        = 2.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from DDIF_ENQU_GET' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
-    IF ls_dd25v IS INITIAL.
-      RETURN. " does not exist in system
+
+    IF ls_dd25v IS INITIAL OR lv_state <> 'A'.
+      RETURN.
     ENDIF.
 
     CLEAR: ls_dd25v-as4user,

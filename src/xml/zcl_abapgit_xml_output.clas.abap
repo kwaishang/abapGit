@@ -5,25 +5,8 @@ CLASS zcl_abapgit_xml_output DEFINITION
 
   PUBLIC SECTION.
 
-    METHODS add
-      IMPORTING
-        !iv_name TYPE clike
-        !ig_data TYPE any
-      RAISING
-        zcx_abapgit_exception .
-    METHODS set_raw
-      IMPORTING
-        !ii_raw TYPE REF TO if_ixml_element .
-    METHODS add_xml
-      IMPORTING
-        !iv_name TYPE clike
-        !ii_xml  TYPE REF TO if_ixml_element .
-    METHODS render
-      IMPORTING
-        !iv_normalize TYPE abap_bool DEFAULT abap_true
-        !is_metadata  TYPE zif_abapgit_definitions=>ty_metadata OPTIONAL
-      RETURNING
-        VALUE(rv_xml) TYPE string .
+    INTERFACES zif_abapgit_xml_output.
+
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -39,7 +22,29 @@ ENDCLASS.
 CLASS ZCL_ABAPGIT_XML_OUTPUT IMPLEMENTATION.
 
 
-  METHOD add.
+  METHOD build_asx_node.
+
+    DATA: li_attr TYPE REF TO if_ixml_attribute.
+
+
+    ri_element = mi_xml_doc->create_element_ns(
+      name   = 'abap'
+      prefix = 'asx' ).
+
+    li_attr = mi_xml_doc->create_attribute_ns( 'version' ).
+    li_attr->if_ixml_node~set_value( '1.0' ).
+    ri_element->set_attribute_node_ns( li_attr ).
+
+    li_attr = mi_xml_doc->create_attribute_ns(
+      name   = 'asx'
+      prefix = 'xmlns' ).
+    li_attr->if_ixml_node~set_value( 'http://www.sap.com/abapxml' ).
+    ri_element->set_attribute_node_ns( li_attr ).
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_xml_output~add.
 
     DATA: li_node TYPE REF TO if_ixml_node,
           li_doc  TYPE REF TO if_ixml_document,
@@ -76,7 +81,7 @@ CLASS ZCL_ABAPGIT_XML_OUTPUT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD add_xml.
+  METHOD zif_abapgit_xml_output~add_xml.
 
     DATA: li_element TYPE REF TO if_ixml_element.
 
@@ -88,29 +93,7 @@ CLASS ZCL_ABAPGIT_XML_OUTPUT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD build_asx_node.
-
-    DATA: li_attr TYPE REF TO if_ixml_attribute.
-
-
-    ri_element = mi_xml_doc->create_element_ns(
-      name   = 'abap'
-      prefix = 'asx' ).
-
-    li_attr = mi_xml_doc->create_attribute_ns( 'version' ).
-    li_attr->if_ixml_node~set_value( '1.0' ).
-    ri_element->set_attribute_node_ns( li_attr ).
-
-    li_attr = mi_xml_doc->create_attribute_ns(
-      name   = 'asx'
-      prefix = 'xmlns' ).
-    li_attr->if_ixml_node~set_value( 'http://www.sap.com/abapxml' ).
-    ri_element->set_attribute_node_ns( li_attr ).
-
-  ENDMETHOD.
-
-
-  METHOD render.
+  METHOD zif_abapgit_xml_output~render.
 
     DATA: li_git  TYPE REF TO if_ixml_element,
           li_abap TYPE REF TO if_ixml_element.
@@ -127,7 +110,8 @@ CLASS ZCL_ABAPGIT_XML_OUTPUT IMPLEMENTATION.
     ENDIF.
 
     li_git = mi_xml_doc->create_element( c_abapgit_tag ).
-    li_git->set_attribute( name = c_attr_version value = zif_abapgit_version=>gc_xml_version ).
+    li_git->set_attribute( name = c_attr_version
+                           value = zif_abapgit_version=>c_xml_version ).
     IF NOT is_metadata IS INITIAL.
       li_git->set_attribute( name  = c_attr_serializer
                              value = is_metadata-class ).
@@ -142,7 +126,7 @@ CLASS ZCL_ABAPGIT_XML_OUTPUT IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD set_raw.
+  METHOD zif_abapgit_xml_output~set_raw.
     mi_raw = ii_raw.
   ENDMETHOD.
 ENDCLASS.

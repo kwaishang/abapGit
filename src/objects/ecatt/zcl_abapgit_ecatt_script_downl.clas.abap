@@ -22,7 +22,7 @@ CLASS zcl_abapgit_ecatt_script_downl DEFINITION
     METHODS:
       set_script_to_template
         RAISING
-          cx_ecatt_apl_util,
+          cx_ecatt_apl,
 
       set_control_data_for_tcd
         IMPORTING
@@ -37,21 +37,21 @@ CLASS zcl_abapgit_ecatt_script_downl DEFINITION
           iv_tabname TYPE string
           iv_node    TYPE string
         RAISING
-          cx_ecatt_apl_util,
+          cx_ecatt_apl,
 
       set_blob_to_template
         RAISING
-          cx_ecatt_apl_util,
+          cx_ecatt_apl,
 
       set_artmp_to_template
         RAISING
-          cx_ecatt_apl_util.
+          cx_ecatt_apl.
 
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
+CLASS zcl_abapgit_ecatt_script_downl IMPLEMENTATION.
 
 
   METHOD download.
@@ -98,7 +98,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
               set_deep_stru_to_dom( ecatt_script->params ).
               set_deep_data_to_dom( ecatt_script->params ).
               IF wa_parm-xmlref_typ = cl_apl_ecatt_const=>ref_type_c_tcd.
-                set_control_data_for_tcd( is_param  =  wa_parm
+                set_control_data_for_tcd( is_param  = wa_parm
                                           io_params = ecatt_script->params ).
 
               ENDIF.
@@ -144,8 +144,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
           li_elem     TYPE REF TO if_ixml_element.
 
     li_vars = ii_element->find_from_name_ns( iv_tabname ).
-    li_filter = ii_element->create_filter_node_type(
-    if_ixml_node=>co_node_text ).
+    li_filter = ii_element->create_filter_node_type( if_ixml_node=>co_node_text ).
     IF li_vars IS NOT INITIAL.
       li_abapctrl = ii_element->get_elements_by_tag_name_ns( iv_node ).
 
@@ -181,7 +180,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
     DATA: li_artmp_node   TYPE REF TO if_ixml_element,
           lv_rc           TYPE sy-subrc,
           lv_text         TYPE string,
-          lv_rc_args_tmpl TYPE int4,
+          lv_rc_args_tmpl TYPE i,
           lv_errmsg       TYPE string.
 
     li_artmp_node = template_over_all->create_simple_element(
@@ -195,16 +194,16 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
         ex_errmsg       = lv_errmsg ).
 
     IF li_artmp_node IS INITIAL OR lv_rc_args_tmpl > 0.
-      me->raise_download_exception(
+      raise_download_exception(
           textid        = cx_ecatt_apl_util=>download_processing
           previous      = ex_ecatt
           called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_ARTMP_TO_TEMPLATE'
           free_text     = lv_errmsg ).
     ENDIF.
 
-    lv_rc = li_artmp_node->set_value( value = lv_text ).
+    lv_rc = li_artmp_node->set_value( lv_text ).
     IF lv_rc <> 0.
-      me->raise_download_exception(
+      raise_download_exception(
             textid        = cx_ecatt_apl_util=>download_processing
             previous      = ex_ecatt
             called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_ARTMP_TO_TEMPLATE' ).
@@ -226,7 +225,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
                   parent = root_node ).
 
     IF li_blob_node IS INITIAL.
-      me->raise_download_exception(
+      raise_download_exception(
             textid        = cx_ecatt_apl_util=>download_processing
             previous      = ex_ecatt
             called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_BLOB_TO_TEMPLATE' ).
@@ -238,9 +237,9 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
       IMPORTING
         ex_xml_blob   = lv_text ).
 
-    lv_rc = li_blob_node->set_value( value = lv_text ).
+    lv_rc = li_blob_node->set_value( lv_text ).
     IF lv_rc <> 0.
-      me->raise_download_exception(
+      raise_download_exception(
             textid        = cx_ecatt_apl_util=>download_processing
             previous      = ex_ecatt
             called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_BLOB_TO_TEMPLATE' ).
@@ -272,8 +271,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
 
     FIELD-SYMBOLS: <lt_tab> TYPE STANDARD TABLE.
 
-    IF is_param-xmlref_typ <> cl_apl_ecatt_const=>ref_type_c_tcd
-      OR  io_params IS INITIAL.
+    IF is_param-xmlref_typ <> cl_apl_ecatt_const=>ref_type_c_tcd OR io_params IS INITIAL.
       RETURN.
     ENDIF.
 
@@ -353,7 +351,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
           ASSIGN lt_svars TO <lt_tab>.
       ENDCASE.
 
-      CALL FUNCTION 'SDIXML_DATA_TO_DOM'       "Ast generieren lassen
+      CALL FUNCTION 'SDIXML_DATA_TO_DOM'       "Generate branch
         EXPORTING
           name         = lv_name
           dataobject   = <lt_tab>
@@ -364,16 +362,16 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
           OTHERS       = 2.
 
       IF sy-subrc <> 0.
-        me->raise_download_exception(
+        raise_download_exception(
               textid   = cx_ecatt_apl_util=>download_processing
               previous = ex_ecatt ).
       ENDIF.
 
-* Ast in Hauptbaum haengen
-      lv_rc = li_deep_tcd->append_child( new_child = li_element ).
+* Hang a branch in the main tree
+      lv_rc = li_deep_tcd->append_child( li_element ).
 
       IF lv_rc <> 0.
-        me->raise_download_exception(
+        raise_download_exception(
               textid   = cx_ecatt_apl_util=>download_processing
               previous = ex_ecatt ).
       ENDIF.
@@ -405,16 +403,14 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
       li_element TYPE REF TO if_ixml_element,
       lv_rc      TYPE sy-subrc.
 
-    ecatt_script->get_script_text(
-      CHANGING
-        scripttext = lt_text ).
+    ecatt_script->get_script_text( CHANGING scripttext = lt_text ).
 
     mi_script_node = template_over_all->create_simple_element(
                         name = 'SCRIPT'
                         parent = root_node ).
 
     IF mi_script_node IS INITIAL.
-      me->raise_download_exception(
+      raise_download_exception(
             textid        = cx_ecatt_apl_util=>download_processing
             previous      = ex_ecatt
             called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_SCRIPT_TO_TEMPLATE' ).
@@ -432,7 +428,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
         illegal_name = 1
         OTHERS       = 2.
     IF sy-subrc <> 0.
-      me->raise_download_exception(
+      raise_download_exception(
             textid        = cx_ecatt_apl_util=>download_processing
             previous      = ex_ecatt
             called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_SCRIPT_TO_TEMPLATE' ).
@@ -441,7 +437,7 @@ CLASS ZCL_ABAPGIT_ECATT_SCRIPT_DOWNL IMPLEMENTATION.
 
     lv_rc = mi_script_node->append_child( li_element ).
     IF lv_rc <> 0.
-      me->raise_download_exception(
+      raise_download_exception(
             textid        = cx_ecatt_apl_util=>download_processing
             previous      = ex_ecatt
             called_method = 'CL_APL_ECATT_SCRIPT_DOWNLOAD->SET_SCRIPT_TO_TEMPLATE' ).

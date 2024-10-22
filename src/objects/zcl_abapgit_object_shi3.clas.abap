@@ -2,12 +2,15 @@ CLASS zcl_abapgit_object_shi3 DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
 
     METHODS constructor
       IMPORTING
-        is_item     TYPE zif_abapgit_definitions=>ty_item
-        iv_language TYPE spras.
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
 
@@ -27,20 +30,29 @@ CLASS zcl_abapgit_object_shi3 DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
       IMPORTING
         !iv_structure_id TYPE hier_guid .
   PRIVATE SECTION.
-    DATA: mv_tree_id TYPE ttree-id.
 
+    DATA mv_tree_id TYPE ttree-id.
+
+    METHODS insert_transport
+      IMPORTING
+        !iv_transport TYPE trkorr
+      RAISING
+        zcx_abapgit_exception.
     METHODS jump_se43
-      RAISING zcx_abapgit_exception.
-
+      RAISING
+        zcx_abapgit_exception.
+    METHODS jump_sbach04
+      RAISING
+        zcx_abapgit_exception.
     METHODS clear_fields
-      CHANGING cs_head  TYPE ttree
-               ct_nodes TYPE hier_iface_t.
-
+      CHANGING
+        !cs_head  TYPE ttree
+        !ct_nodes TYPE hier_iface_t.
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
+CLASS zcl_abapgit_object_shi3 IMPLEMENTATION.
 
 
   METHOD clear_fields.
@@ -62,8 +74,15 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
 
 
   METHOD constructor.
-    super->constructor( is_item = is_item iv_language = iv_language ).
+
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
+
     mv_tree_id = ms_item-obj_name.
+
   ENDMETHOD.
 
 
@@ -91,6 +110,53 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD insert_transport.
+
+    DATA:
+      ls_msg     TYPE hier_mess,
+      ls_object  TYPE e071,
+      lt_objects TYPE TABLE OF e071,
+      lt_keys    TYPE TABLE OF e071k,
+      ls_ko200   TYPE ko200,
+      lt_ko200   TYPE TABLE OF ko200.
+
+    " This function shows a popup so get objects and keys and insert
+    " them into transport below
+    CALL FUNCTION 'STREE_INSERT_ALL_IN_TRANSPORT'
+      EXPORTING
+        structure_id               = mv_tree_id
+        iv_return_objects_and_keys = abap_true
+      IMPORTING
+        message                    = ls_msg
+      TABLES
+        et_objects                 = lt_objects
+        et_keys                    = lt_keys.
+    IF ls_msg-msgty = 'E'.
+      MESSAGE ID ls_msg-msgid TYPE ls_msg-msgty NUMBER ls_msg-msgno
+        WITH ls_msg-msgv1 ls_msg-msgv2 ls_msg-msgv3 ls_msg-msgv4 INTO zcx_abapgit_exception=>null.
+      zcx_abapgit_exception=>raise_t100( ).
+    ENDIF.
+
+    LOOP AT lt_objects INTO ls_object.
+      MOVE-CORRESPONDING ls_object TO ls_ko200.
+      INSERT ls_ko200 INTO TABLE lt_ko200.
+    ENDLOOP.
+
+    CALL FUNCTION 'TR_RECORD_OBJ_CHANGE_TO_REQ'
+      EXPORTING
+        iv_request = iv_transport
+        it_objects = lt_ko200
+        it_keys    = lt_keys
+      EXCEPTIONS
+        cancel     = 1
+        OTHERS     = 2.
+    IF sy-subrc <> 0.
+      zcx_abapgit_exception=>raise_t100( ).
+    ENDIF.
+
+  ENDMETHOD.
+
+
   METHOD is_used.
 
     DATA: lt_used_in_structures TYPE STANDARD TABLE OF ttree WITH DEFAULT KEY.
@@ -105,6 +171,33 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
       zcx_abapgit_exception=>raise( |IMG structure ID { iv_structure_id } is still used| ).
     ENDIF.
 
+  ENDMETHOD.
+
+
+  METHOD jump_sbach04.
+    DATA: ls_message      TYPE hier_mess,
+          lv_structure_id TYPE hier_treeg.
+
+    lv_structure_id = ms_item-obj_name.
+
+    CALL FUNCTION 'STREE_EXTERNAL_EDIT'
+      EXPORTING
+        structure_id   = lv_structure_id
+        language       = mv_language
+        edit_structure = abap_false
+        no_commit_work = abap_false
+        activity       = 'D'
+      IMPORTING
+        message        = ls_message.
+    IF ls_message IS NOT INITIAL.
+      zcx_abapgit_exception=>raise_t100(
+        iv_msgid = ls_message-msgid
+        iv_msgno = ls_message-msgno
+        iv_msgv1 = ls_message-msgv1
+        iv_msgv2 = ls_message-msgv2
+        iv_msgv3 = ls_message-msgv3
+        iv_msgv4 = ls_message-msgv4 ).
+    ENDIF.
   ENDMETHOD.
 
 
@@ -127,22 +220,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
     <ls_bdcdata>-fnam = 'BMENUNAME-ID'.
     <ls_bdcdata>-fval = ms_item-obj_name.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode                 = 'SE43'
-        mode_val              = 'E'
-      TABLES
-        using_tab             = lt_bdcdata
-      EXCEPTIONS
-        system_failure        = 1
-        communication_failure = 2
-        resource_failure      = 3
-        OTHERS                = 4.
-
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from ABAP4_CALL_TRANSACTION, SHI3' ).
-    ENDIF.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SE43'
+      it_bdcdata = lt_bdcdata ).
 
   ENDMETHOD.
 
@@ -167,7 +247,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
     CONSTANTS lc_activity_delete_06 TYPE activ_auth VALUE '06'.
 
     TRY.
-        me->zif_abapgit_object~exists( ).
+        IF zif_abapgit_object~exists( ) = abap_false.
+          RETURN.
+        ENDIF.
       CATCH zcx_abapgit_exception.
         RETURN.
     ENDTRY.
@@ -187,6 +269,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
 
     DATA: ls_msg    TYPE hier_mess,
           ls_head   TYPE ttree,
+          ls_ttree  TYPE ttree,
           lt_titles TYPE TABLE OF ttreet,
           lt_nodes  TYPE TABLE OF hier_iface,
           lt_texts  TYPE TABLE OF hier_texts,
@@ -203,8 +286,21 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
     io_xml->read( EXPORTING iv_name = 'TREE_TEXTS'
                   CHANGING  cg_data = lt_texts ).
 
+    mo_i18n_params->trim_saplang_keyed_table(
+      EXPORTING
+        iv_lang_field_name = 'SPRAS'
+        iv_keep_master_lang = abap_true
+      CHANGING
+        ct_tab = lt_titles ).
+    mo_i18n_params->trim_saplang_keyed_table(
+      EXPORTING
+        iv_lang_field_name = 'SPRAS'
+        iv_keep_master_lang = abap_true
+      CHANGING
+        ct_tab = lt_texts ).
+
     IF zif_abapgit_object~exists( ) = abap_true.
-      zif_abapgit_object~delete( ).
+      delete_tree_structure( mv_tree_id ).
     ENDIF.
 
     CALL FUNCTION 'STREE_HIERARCHY_SAVE'
@@ -214,6 +310,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
         structure_description    = space
         structure_masterlanguage = mv_language
         structure_responsible    = sy-uname
+        structure_buffermode     = ls_head-buffermode
         development_class        = iv_package
       IMPORTING
         message                  = ls_msg
@@ -226,7 +323,25 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
         no_nodes_given           = 1
         OTHERS                   = 2.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'Error from STREE_HIERARCHY_SAVE, SHI3' ).
+      zcx_abapgit_exception=>raise_t100( ).
+    ELSEIF ls_msg-msgty = 'E'.
+      MESSAGE ID ls_msg-msgid TYPE ls_msg-msgty NUMBER ls_msg-msgno
+        WITH ls_msg-msgv1 ls_msg-msgv2 ls_msg-msgv3 ls_msg-msgv4 INTO zcx_abapgit_exception=>null.
+      zcx_abapgit_exception=>raise_t100( ).
+    ENDIF.
+
+    " Set buffer mode for menus (see function BMENU_CREATE_TREE)
+    SELECT SINGLE * FROM ttree INTO ls_ttree
+      WHERE type = 'BMENU' AND id = mv_tree_id.
+    IF sy-subrc = 0.
+      ls_ttree-buffermode = ls_head-buffermode.
+      ls_ttree-buffervar  = ls_head-buffervar.
+      MODIFY ttree FROM ls_ttree.
+    ENDIF.
+
+    IF zcl_abapgit_factory=>get_sap_package( iv_package )->are_changes_recorded_in_tr_req( ) = abap_true.
+      " Add necessary SHI6, SHI7, and TABU entries to transport (SAP Note 455542)
+      insert_transport( iv_transport ).
     ENDIF.
 
   ENDMETHOD.
@@ -238,10 +353,12 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
           ls_header TYPE ttree,
           ls_tadir  TYPE tadir.
 
+    " Ignore buffer and get state from DB
     CALL FUNCTION 'STREE_STRUCTURE_EXIST'
       EXPORTING
         structure_id         = mv_tree_id
-        do_not_read_devclass = ''
+        read_from_database   = abap_true
+        do_not_read_devclass = abap_false
       IMPORTING
         message              = ls_msg
         structure_header     = ls_header
@@ -253,6 +370,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -290,21 +412,34 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
     CASE ls_head-type.
       WHEN 'BMENU'.
         jump_se43( ).
-      WHEN OTHERS.
-        zcx_abapgit_exception=>raise( |Jump for type { ls_head-type } not implemented| ).
+        rv_exit = abap_true.
+      WHEN 'GHIER'.
+        jump_sbach04( ).
+        rv_exit = abap_true.
     ENDCASE.
 
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~serialize.
 
-    DATA: ls_msg    TYPE hier_mess,
-          ls_head   TYPE ttree,
-          lt_titles TYPE TABLE OF ttreet,
-          lt_nodes  TYPE TABLE OF hier_iface,
-          lt_texts  TYPE TABLE OF hier_texts,
-          lt_refs   TYPE TABLE OF hier_ref.
+    DATA: ls_msg           TYPE hier_mess,
+          ls_head          TYPE ttree,
+          lt_titles        TYPE TABLE OF ttreet,
+          lt_nodes         TYPE TABLE OF hier_iface,
+          lt_texts         TYPE TABLE OF hier_texts,
+          lt_refs          TYPE TABLE OF hier_ref,
+          lv_all_languages TYPE abap_bool.
 
 
     CALL FUNCTION 'STREE_STRUCTURE_READ'
@@ -316,11 +451,25 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
       TABLES
         description      = lt_titles.
 
+    IF mo_i18n_params->ms_params-main_language_only = abap_true OR mo_i18n_params->is_lxe_applicable( ) = abap_true.
+      lv_all_languages = abap_false.
+      DELETE lt_titles WHERE spras <> mv_language.
+    ELSE.
+      lv_all_languages = abap_true.
+      mo_i18n_params->trim_saplang_keyed_table(
+        EXPORTING
+            iv_lang_field_name = 'SPRAS'
+            iv_keep_master_lang = abap_true
+          CHANGING
+            ct_tab = lt_titles ).
+    ENDIF.
+
     CALL FUNCTION 'STREE_HIERARCHY_READ'
       EXPORTING
         structure_id       = mv_tree_id
-        read_also_texts    = 'X'
-        all_languages      = 'X'
+        read_also_texts    = abap_true
+        all_languages      = lv_all_languages
+        language           = mv_language
       IMPORTING
         message            = ls_msg
       TABLES
@@ -330,6 +479,19 @@ CLASS ZCL_ABAPGIT_OBJECT_SHI3 IMPLEMENTATION.
 
     clear_fields( CHANGING cs_head  = ls_head
                            ct_nodes = lt_nodes ).
+
+    SORT lt_titles BY id.
+    DELETE ADJACENT DUPLICATES FROM lt_titles COMPARING spras id.
+
+    SORT lt_texts BY spras.
+    DELETE ADJACENT DUPLICATES FROM lt_texts COMPARING spras node_id.
+
+    mo_i18n_params->trim_saplang_keyed_table(
+      EXPORTING
+        iv_lang_field_name = 'SPRAS'
+        iv_keep_master_lang = abap_true
+      CHANGING
+        ct_tab = lt_texts ).
 
     io_xml->add( iv_name = 'TREE_HEAD'
                  ig_data = ls_head ).

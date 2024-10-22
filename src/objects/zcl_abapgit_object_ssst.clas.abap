@@ -2,9 +2,8 @@ CLASS zcl_abapgit_object_ssst DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-    CONSTANTS: c_style_active TYPE tdactivate VALUE 'A'.
 
+    CONSTANTS: c_style_active TYPE tdactivate VALUE 'A'.
   PROTECTED SECTION.
   PRIVATE SECTION.
     METHODS validate_font
@@ -15,7 +14,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
+CLASS zcl_abapgit_object_ssst IMPLEMENTATION.
 
 
   METHOD validate_font.
@@ -64,7 +63,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
         illegal_language      = 6
         OTHERS                = 7.
     IF sy-subrc <> 0 AND sy-subrc <> 2.
-      zcx_abapgit_exception=>raise( 'error from SSF_DELETE_STYLE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -123,6 +122,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
       CALL FUNCTION 'SSF_ACTIVATE_STYLE'
         EXPORTING
           i_stylename          = ls_header-stylename
+          redirect_error_msg   = abap_true " otherwise warnings write list output
         EXCEPTIONS
           no_name              = 1
           no_style             = 2
@@ -131,7 +131,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
           illegal_language     = 5
           OTHERS               = 6.
       IF sy-subrc <> 0.
-        zcx_abapgit_exception=>raise( 'error from SSF_ACTIVATE_STYLE' ).
+        zcx_abapgit_exception=>raise_t100( ).
       ENDIF.
 
     ENDIF.
@@ -158,6 +158,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -165,7 +170,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -200,20 +204,22 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
     ls_bcdata-fval = '=DISPLAY'.
     APPEND ls_bcdata TO lt_bcdata.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SMARTSTYLES'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bcdata
-      EXCEPTIONS
-        OTHERS    = 1.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SMARTSTYLES'
+      it_bdcdata = lt_bcdata ).
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from ABAP4_CALL_TRANSACTION, SSST' ).
-    ENDIF.
+    rv_exit = abap_true.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -254,7 +260,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSST IMPLEMENTATION.
     IF sy-subrc = 2.
       RETURN.
     ELSEIF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from SSF_READ_STYLE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     CLEAR ls_header-version.

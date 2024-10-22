@@ -2,15 +2,29 @@ CLASS zcl_abapgit_object_para DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
+
+    METHODS unlock
+      IMPORTING
+        !iv_paramid TYPE memoryid .
+
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
+CLASS zcl_abapgit_object_para IMPLEMENTATION.
+
+
+  METHOD unlock.
+
+    CALL FUNCTION 'RS_ACCESS_PERMISSION'
+      EXPORTING
+        mode         = 'FREE'
+        object       = iv_paramid
+        object_class = 'PARA'.
+
+  ENDMETHOD.
 
 
   METHOD zif_abapgit_object~changed_by.
@@ -24,8 +38,7 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
     " We can't use FM RS_PARAMETER_DELETE because of the popup to confirm
     "Therefore we have to reimplement most of the FMs logic
 
-    DATA: lv_paramid   TYPE tpara-paramid,
-          ls_transpkey TYPE trkey.
+    DATA lv_paramid TYPE tpara-paramid.
 
     lv_paramid = ms_item-obj_name.
 
@@ -51,47 +64,38 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
-    SELECT COUNT(*) FROM cross WHERE ( type = 'P' OR
-                               type = 'Q' )
-                              AND name   = lv_paramid.
+    SELECT COUNT(*) FROM cross
+      WHERE ( type = 'P' OR type = 'Q' ) AND name = lv_paramid.
     IF sy-subrc = 0.
+      unlock( lv_paramid ).
       zcx_abapgit_exception=>raise( 'PARA: Parameter is still used' ).
     ELSE.
       SELECT COUNT(*) FROM dd04l BYPASSING BUFFER
-      WHERE  memoryid = lv_paramid
-      AND as4local = 'A'.
+        WHERE memoryid = lv_paramid
+        AND as4local = 'A'.
       IF sy-subrc = 0.
+        unlock( lv_paramid ).
         zcx_abapgit_exception=>raise( 'PARA: Parameter is still used' ).
       ENDIF.
     ENDIF.
-    CALL FUNCTION 'RS_CORR_INSERT'
+
+    unlock( lv_paramid ).
+
+    zcl_abapgit_factory=>get_cts_api( )->insert_transport_object(
+      iv_object   = 'PARA'
+      iv_obj_name = lv_paramid
+      iv_package  = iv_package
+      iv_language = mv_language
+      iv_mode     = zif_abapgit_cts_api=>c_transport_mode-delete ).
+
+    DELETE FROM tpara WHERE paramid = lv_paramid.
+    DELETE FROM tparat WHERE paramid = lv_paramid.
+
+    CALL FUNCTION 'RS_TREE_OBJECT_PLACEMENT'
       EXPORTING
-        global_lock         = abap_true
-        object              = lv_paramid
-        object_class        = 'PARA'
-        mode                = 'D'
-        suppress_dialog     = abap_true
-      IMPORTING
-        transport_key       = ls_transpkey
-      EXCEPTIONS
-        cancelled           = 01
-        permission_failure  = 02
-        unknown_objectclass = 03.
-
-    IF sy-subrc = 0.
-      DELETE FROM tpara WHERE paramid = lv_paramid.
-      DELETE FROM tparat WHERE paramid = lv_paramid.
-
-      IF sy-subrc = 0.
-        CALL FUNCTION 'RS_TREE_OBJECT_PLACEMENT'
-          EXPORTING
-            object    = lv_paramid
-            operation = 'DELETE'
-            type      = 'CR'.
-      ENDIF.
-    ELSE.
-      zcx_abapgit_exception=>raise( 'error from RS_CORR_INSERT' ).
-    ENDIF.
+        object    = lv_paramid
+        operation = 'DELETE'
+        type      = 'CR'.
 
   ENDMETHOD.
 
@@ -103,7 +107,6 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
           ls_tpara  TYPE tpara,
           ls_tparat TYPE tparat.
 
-
     SELECT SINGLE * FROM tpara INTO ls_tpara
       WHERE paramid = ms_item-obj_name.                 "#EC CI_GENBUFF
     IF sy-subrc = 0.
@@ -114,8 +117,6 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
 
     io_xml->read( EXPORTING iv_name = 'TPARA'
                   CHANGING cg_data = ls_tpara ).
-    io_xml->read( EXPORTING iv_name = 'TPARAT'
-                  CHANGING cg_data = ls_tparat ).
 
     CALL FUNCTION 'RS_CORR_INSERT'
       EXPORTING
@@ -132,11 +133,15 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
         unknown_objectclass = 3
         OTHERS              = 4.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from RS_CORR_INSERT, PARA' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     MODIFY tpara FROM ls_tpara.                           "#EC CI_SUBRC
     ASSERT sy-subrc = 0.
+
+    io_xml->read(
+      EXPORTING iv_name = 'TPARAT'
+      CHANGING  cg_data = ls_tparat ).
 
     MODIFY tparat FROM ls_tparat.                         "#EC CI_SUBRC
     ASSERT sy-subrc = 0.
@@ -161,6 +166,11 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-ddic TO rt_steps.
   ENDMETHOD.
@@ -168,8 +178,6 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-* Data elements can refer to PARA objects
-    rs_metadata-ddic = abap_true.
   ENDMETHOD.
 
 
@@ -179,28 +187,24 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~is_locked.
-
-    DATA: lv_argument TYPE seqg3-garg.
-
-    lv_argument = |PA{ ms_item-obj_name }|.
-    OVERLAY lv_argument WITH '                                          '.
-    lv_argument = lv_argument && '*'.
-
     rv_is_locked = exists_a_lock_entry_for( iv_lock_object = 'EEUDB'
-                                            iv_argument    = lv_argument ).
-
+                                            iv_argument    = ms_item-obj_name
+                                            iv_prefix      = 'PA' ).
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = 'PARA'
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -208,7 +212,6 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
 
     DATA: ls_tpara  TYPE tpara,
           ls_tparat TYPE tparat.
-
 
     SELECT SINGLE * FROM tpara INTO ls_tpara
       WHERE paramid = ms_item-obj_name.                 "#EC CI_GENBUFF
@@ -222,8 +225,12 @@ CLASS ZCL_ABAPGIT_OBJECT_PARA IMPLEMENTATION.
 
     io_xml->add( iv_name = 'TPARA'
                  ig_data = ls_tpara ).
-    io_xml->add( iv_name = 'TPARAT'
-                 ig_data = ls_tparat ).
+
+    io_xml->add(
+      iv_name = 'TPARAT'
+      ig_data = ls_tparat ).
+    " Here only the original language is serialized,
+    " so it should be present for the moment. LXEs are just translations
 
   ENDMETHOD.
 ENDCLASS.

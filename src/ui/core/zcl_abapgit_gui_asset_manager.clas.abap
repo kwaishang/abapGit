@@ -4,26 +4,22 @@ CLASS zcl_abapgit_gui_asset_manager DEFINITION PUBLIC FINAL CREATE PUBLIC .
 
     INTERFACES zif_abapgit_gui_asset_manager.
 
-    TYPES:
-      BEGIN OF ty_asset_entry.
-        INCLUDE TYPE zif_abapgit_gui_asset_manager~ty_web_asset.
-    TYPES:  mime_name TYPE wwwdatatab-objid,
-      END OF ty_asset_entry ,
-      tt_asset_register TYPE STANDARD TABLE OF ty_asset_entry WITH KEY url .
-
-    METHODS register_asset
-      IMPORTING
-        !iv_url TYPE string
-        !iv_type TYPE string
-        !iv_cachable TYPE abap_bool DEFAULT abap_true
-        !iv_mime_name TYPE wwwdatatab-objid OPTIONAL
-        !iv_base64 TYPE string OPTIONAL
-        !iv_inline TYPE string OPTIONAL .
+    CLASS-METHODS create
+      RETURNING
+        VALUE(ri_asset_manager) TYPE REF TO zif_abapgit_gui_asset_manager.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
 
-    DATA mt_asset_register TYPE tt_asset_register.
+    TYPES:
+      BEGIN OF ty_asset_entry.
+        INCLUDE TYPE zif_abapgit_gui_asset_manager~ty_web_asset.
+    TYPES: mime_name TYPE wwwdatatab-objid,
+      END OF ty_asset_entry.
+    TYPES:
+      ty_asset_register TYPE STANDARD TABLE OF ty_asset_entry WITH KEY url.
+
+    DATA mt_asset_register TYPE ty_asset_register.
 
     METHODS get_mime_asset
       IMPORTING
@@ -35,7 +31,7 @@ CLASS zcl_abapgit_gui_asset_manager DEFINITION PUBLIC FINAL CREATE PUBLIC .
 
     METHODS load_asset
       IMPORTING
-        is_asset_entry TYPE ty_asset_entry
+        is_asset_entry  TYPE ty_asset_entry
       RETURNING
         VALUE(rs_asset) TYPE zif_abapgit_gui_asset_manager~ty_web_asset
       RAISING
@@ -45,7 +41,12 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_GUI_ASSET_MANAGER IMPLEMENTATION.
+CLASS zcl_abapgit_gui_asset_manager IMPLEMENTATION.
+
+
+  METHOD create.
+    CREATE OBJECT ri_asset_manager TYPE zcl_abapgit_gui_asset_manager.
+  ENDMETHOD.
 
 
   METHOD get_mime_asset.
@@ -53,7 +54,8 @@ CLASS ZCL_ABAPGIT_GUI_ASSET_MANAGER IMPLEMENTATION.
     DATA: ls_key    TYPE wwwdatatab,
           lv_size_c TYPE wwwparams-value,
           lv_size   TYPE i,
-          lt_w3mime TYPE STANDARD TABLE OF w3mime.
+          lt_w3mime TYPE STANDARD TABLE OF w3mime,
+          ls_w3mime LIKE LINE OF lt_w3mime.
 
     ls_key-relid = 'MI'.
     ls_key-objid = iv_mime_name.
@@ -89,9 +91,10 @@ CLASS ZCL_ABAPGIT_GUI_ASSET_MANAGER IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    rv_xdata = zcl_abapgit_convert=>bintab_to_xstring(
-      iv_size   = lv_size
-      it_bintab = lt_w3mime ).
+    LOOP AT lt_w3mime INTO ls_w3mime.
+      CONCATENATE rv_xdata ls_w3mime-line INTO rv_xdata IN BYTE MODE.
+    ENDLOOP.
+    rv_xdata = rv_xdata(lv_size).
 
   ENDMETHOD.
 
@@ -110,25 +113,6 @@ CLASS ZCL_ABAPGIT_GUI_ASSET_MANAGER IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD register_asset.
-
-    DATA ls_asset LIKE LINE OF mt_asset_register.
-
-    SPLIT iv_type AT '/' INTO ls_asset-type ls_asset-subtype.
-    ls_asset-url          = iv_url.
-    ls_asset-mime_name    = iv_mime_name.
-    ls_asset-is_cacheable = iv_cachable.
-    IF iv_base64 IS NOT INITIAL.
-      ls_asset-content = zcl_abapgit_convert=>base64_to_xstring( iv_base64 ).
-    ELSEIF iv_inline IS NOT INITIAL.
-      ls_asset-content = zcl_abapgit_convert=>string_to_xstring( iv_inline ).
-    ENDIF.
-
-    APPEND ls_asset TO mt_asset_register.
-
-  ENDMETHOD.
-
-
   METHOD zif_abapgit_gui_asset_manager~get_all_assets.
 
     FIELD-SYMBOLS <ls_a> LIKE LINE OF mt_asset_register.
@@ -142,7 +126,7 @@ CLASS ZCL_ABAPGIT_GUI_ASSET_MANAGER IMPLEMENTATION.
 
   METHOD zif_abapgit_gui_asset_manager~get_asset.
 
-    FIELD-SYMBOLS <ls_a> LIKE LINE of mt_asset_register.
+    FIELD-SYMBOLS <ls_a> LIKE LINE OF mt_asset_register.
 
     READ TABLE mt_asset_register WITH KEY url = iv_url ASSIGNING <ls_a>.
     IF <ls_a> IS NOT ASSIGNED.
@@ -156,9 +140,38 @@ CLASS ZCL_ABAPGIT_GUI_ASSET_MANAGER IMPLEMENTATION.
   METHOD zif_abapgit_gui_asset_manager~get_text_asset.
 
     DATA ls_asset TYPE zif_abapgit_gui_asset_manager~ty_web_asset.
-    ls_asset = me->zif_abapgit_gui_asset_manager~get_asset( iv_url ).
+    ls_asset = zif_abapgit_gui_asset_manager~get_asset( iv_url ).
+
+    IF ls_asset-type <> 'text'.
+      zcx_abapgit_exception=>raise( |Not a text asset: { iv_url }| ).
+    ENDIF.
+
+    IF iv_assert_subtype IS NOT INITIAL AND ls_asset-subtype <> iv_assert_subtype.
+      zcx_abapgit_exception=>raise( |Wrong subtype ({ iv_assert_subtype }): { iv_url }| ).
+    ENDIF.
 
     rv_asset = zcl_abapgit_convert=>xstring_to_string_utf8( ls_asset-content ).
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_gui_asset_manager~register_asset.
+
+    DATA ls_asset LIKE LINE OF mt_asset_register.
+
+    SPLIT iv_type AT '/' INTO ls_asset-type ls_asset-subtype.
+    ls_asset-url          = iv_url.
+    ls_asset-mime_name    = iv_mime_name.
+    ls_asset-is_cacheable = iv_cacheable.
+    IF iv_base64 IS NOT INITIAL.
+      ls_asset-content = zcl_abapgit_convert=>base64_to_xstring( iv_base64 ).
+    ELSEIF iv_inline IS NOT INITIAL.
+      ls_asset-content = zcl_abapgit_convert=>string_to_xstring( iv_inline ).
+    ENDIF.
+
+    DELETE mt_asset_register WHERE url = iv_url.
+    " TODO: Maybe forbid overwriting cacheable assets as they were probably already cached ... arguable
+    APPEND ls_asset TO mt_asset_register.
 
   ENDMETHOD.
 ENDCLASS.

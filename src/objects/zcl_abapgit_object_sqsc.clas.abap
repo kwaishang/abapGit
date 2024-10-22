@@ -7,13 +7,14 @@ CLASS zcl_abapgit_object_sqsc DEFINITION
     INTERFACES:
       zif_abapgit_object.
 
-    METHODS:
-      constructor
-        IMPORTING
-          is_item     TYPE zif_abapgit_definitions=>ty_item
-          iv_language TYPE spras
-        RAISING
-          zcx_abapgit_exception.
+    METHODS constructor
+      IMPORTING
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -97,29 +98,32 @@ CLASS zcl_abapgit_object_sqsc DEFINITION
       END OF ty_proxy.
 
     DATA:
-      mo_proxy     TYPE REF TO object,
-      mv_transport TYPE e070use-ordernum.
+      mo_proxy TYPE REF TO object.
 
     METHODS:
       delete_interface_if_it_exists
         IMPORTING
+          iv_package   TYPE devclass
+          iv_transport TYPE trkorr
           iv_interface TYPE ty_abap_name
         RAISING
           zcx_abapgit_exception.
-
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
+CLASS zcl_abapgit_object_sqsc IMPLEMENTATION.
 
 
   METHOD constructor.
 
     FIELD-SYMBOLS: <lv_dbproxyname> TYPE ty_abap_name.
 
-    super->constructor( is_item     = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     TRY.
         CREATE OBJECT mo_proxy
@@ -134,10 +138,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
     ENDTRY.
 
     <lv_dbproxyname> = ms_item-obj_name.
-
-    mv_transport = zcl_abapgit_default_transport=>get_instance(
-                                               )->get(
-                                               )-ordernum.
 
   ENDMETHOD.
 
@@ -158,10 +158,13 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
 
       CREATE OBJECT lo_interface
         EXPORTING
-          is_item     = ls_item
-          iv_language = mv_language.
+          is_item        = ls_item
+          iv_language    = mv_language
+          io_files       = mo_files
+          io_i18n_params = mo_i18n_params.
 
-      lo_interface->zif_abapgit_object~delete( ).
+      lo_interface->zif_abapgit_object~delete( iv_package   = iv_package
+                                               iv_transport = iv_transport ).
 
     ENDIF.
 
@@ -169,7 +172,20 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown.
+
+    DATA lx_error TYPE REF TO cx_root.
+
+    TRY.
+        CALL METHOD mo_proxy->('IF_DBPROC_PROXY_UI~READ_FROM_SOURCE')
+          EXPORTING
+            if_version     = 'A'
+          IMPORTING
+            ef_change_user = rv_user.
+
+      CATCH cx_root INTO lx_error.
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
+    ENDTRY.
+
   ENDMETHOD.
 
 
@@ -180,11 +196,10 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
     TRY.
         CALL METHOD mo_proxy->('IF_DBPROC_PROXY_UI~DELETE')
           EXPORTING
-            if_transport_req = mv_transport.
+            if_transport_req = iv_transport.
 
       CATCH cx_root INTO lx_error.
-        zcx_abapgit_exception=>raise( iv_text     = lx_error->get_text( )
-                                      ix_previous = lx_error ).
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
     ENDTRY.
 
   ENDMETHOD.
@@ -203,12 +218,15 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
 
     IF zif_abapgit_object~exists( ) = abap_false.
 
-      delete_interface_if_it_exists( ls_proxy-header-interface_pool ).
+      delete_interface_if_it_exists(
+          iv_package   = iv_package
+          iv_transport = iv_transport
+          iv_interface = ls_proxy-header-interface_pool ).
 
       CALL METHOD mo_proxy->('IF_DBPROC_PROXY_UI~CREATE')
         EXPORTING
           if_interface_pool = ls_proxy-header-interface_pool
-          if_transport_req  = mv_transport
+          if_transport_req  = iv_transport
           if_package        = iv_package
           if_langu          = mv_language.
 
@@ -217,7 +235,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
     TRY.
         CALL METHOD mo_proxy->('IF_DBPROC_PROXY_UI~WRITE_TO_SOURCE')
           EXPORTING
-            if_transport_req  = mv_transport
+            if_transport_req  = iv_transport
             is_header         = ls_proxy-header
             it_parameter      = ls_proxy-parameters
             it_parameter_type = ls_proxy-parameter_types.
@@ -232,8 +250,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
         tadir_insert( iv_package ).
 
       CATCH cx_root INTO lx_error.
-        zcx_abapgit_exception=>raise( iv_text     = lx_error->get_text( )
-                                      ix_previous = lx_error ).
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
     ENDTRY.
 
   ENDMETHOD.
@@ -253,6 +270,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -260,8 +282,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -276,11 +296,17 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_ADT_LINK=>JUMP
+  ENDMETHOD.
 
-    zcl_abapgit_objects_super=>jump_adt(
-        iv_obj_name = ms_item-obj_name
-        iv_obj_type = ms_item-obj_type ).
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -306,8 +332,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SQSC IMPLEMENTATION.
             ef_descr   = ls_proxy-description.
 
       CATCH cx_root INTO lx_error.
-        zcx_abapgit_exception=>raise( iv_text     = lx_error->get_text( )
-                                      ix_previous = lx_error ).
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
     ENDTRY.
 
     io_xml->add( iv_name = 'SQSC'

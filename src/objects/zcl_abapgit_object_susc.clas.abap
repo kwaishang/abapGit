@@ -2,10 +2,9 @@ CLASS zcl_abapgit_object_susc DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
   PROTECTED SECTION.
 
-    CONSTANTS transobjecttype_class TYPE char1 VALUE 'C' ##NO_TEXT.
+    CONSTANTS c_transobjecttype_class TYPE c LENGTH 1 VALUE 'C' ##NO_TEXT.
 
     METHODS has_authorization
       IMPORTING
@@ -30,7 +29,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
+CLASS zcl_abapgit_object_susc IMPLEMENTATION.
 
 
   METHOD delete_class.
@@ -79,9 +78,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
 
     DATA: lv_tr_object_name TYPE e071-obj_name,
           lv_tr_return      TYPE char1,
-          ls_package_info   TYPE tdevc,
-          lv_tadir_object   TYPE tadir-object,
-          lv_tadir_obj_name TYPE tadir-obj_name.
+          ls_package_info   TYPE tdevc.
 
 
     lv_tr_object_name = ms_item-obj_name.
@@ -89,7 +86,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
     CALL FUNCTION 'SUSR_COMMEDITCHECK'
       EXPORTING
         objectname       = lv_tr_object_name
-        transobjecttype  = zcl_abapgit_object_susc=>transobjecttype_class
+        transobjecttype  = c_transobjecttype_class
       IMPORTING
         return_from_korr = lv_tr_return.
 
@@ -105,24 +102,14 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
       EXCEPTIONS
         OTHERS      = 1.
     IF sy-subrc = 0 AND ls_package_info-korrflag IS INITIAL.
-      lv_tadir_object   = ms_item-obj_type.
-      lv_tadir_obj_name = lv_tr_object_name.
-      CALL FUNCTION 'TR_TADIR_INTERFACE'
-        EXPORTING
-          wi_delete_tadir_entry = abap_true
-          wi_test_modus         = space
-          wi_tadir_pgmid        = 'R3TR'
-          wi_tadir_object       = lv_tadir_object
-          wi_tadir_obj_name     = lv_tadir_obj_name
-        EXCEPTIONS
-          OTHERS                = 0.
+      tadir_delete( ).
     ENDIF.
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown. " todo
+    rv_user = c_user_unknown. " not stored by SAP
   ENDMETHOD.
 
 
@@ -136,7 +123,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
     lv_auth_object_class = ms_item-obj_name.
 
     TRY.
-        me->zif_abapgit_object~exists( ).
+        IF zif_abapgit_object~exists( ) = abap_false.
+          RETURN.
+        ENDIF.
       CATCH zcx_abapgit_exception.
         RETURN.
     ENDTRY.
@@ -172,7 +161,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
     CALL FUNCTION 'SUSR_COMMEDITCHECK'
       EXPORTING
         objectname      = lv_objectname
-        transobjecttype = zcl_abapgit_object_susc=>transobjecttype_class.
+        transobjecttype = c_transobjecttype_class.
 
     INSERT tobc FROM ls_tobc.                             "#EC CI_SUBRC
 * ignore sy-subrc as all fields are key fields
@@ -200,6 +189,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -207,7 +201,6 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -230,6 +223,18 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSC IMPLEMENTATION.
       EXPORTING
         objclass = lv_objclass.
 
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 

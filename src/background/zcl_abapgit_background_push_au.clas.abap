@@ -22,9 +22,9 @@ CLASS zcl_abapgit_background_push_au DEFINITION
         zcx_abapgit_exception .
     METHODS determine_user_details
       IMPORTING
-        !iv_changed_by TYPE xubname
+        !iv_changed_by TYPE syuname
       RETURNING
-        VALUE(rs_user) TYPE zif_abapgit_definitions=>ty_git_user .
+        VALUE(rs_user) TYPE zif_abapgit_git_definitions=>ty_git_user .
     METHODS push_deletions
       IMPORTING
         !io_repo  TYPE REF TO zcl_abapgit_repo_online
@@ -36,7 +36,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
+CLASS zcl_abapgit_background_push_au IMPLEMENTATION.
 
 
   METHOD build_comment.
@@ -58,9 +58,9 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
     IF lines( lt_objects ) = 1.
       rv_comment = |BG: { lv_str }|.
     ELSE.
-      rv_comment = 'BG: Multiple objects' ##NO_TEXT.
+      rv_comment = 'BG: Multiple objects'.
       LOOP AT lt_objects INTO lv_str.
-        CONCATENATE rv_comment zif_abapgit_definitions=>c_newline lv_str INTO rv_comment.
+        CONCATENATE rv_comment cl_abap_char_utilities=>newline lv_str INTO rv_comment.
       ENDLOOP.
     ENDIF.
 
@@ -69,12 +69,12 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
 
   METHOD determine_user_details.
 
-    DATA: lo_user_master_record TYPE REF TO zcl_abapgit_user_master_record.
+    DATA: lo_user_record TYPE REF TO zcl_abapgit_user_record.
 
 
-    lo_user_master_record = zcl_abapgit_user_master_record=>get_instance( iv_changed_by ).
-    rs_user-name = lo_user_master_record->get_name( ).
-    rs_user-email = lo_user_master_record->get_email( ).
+    lo_user_record = zcl_abapgit_user_record=>get_instance( iv_changed_by ).
+    rs_user-name = lo_user_record->get_name( ).
+    rs_user-email = lo_user_record->get_email( ).
 
 *   If no email, fall back to localhost/default email
     IF rs_user-email IS INITIAL.
@@ -94,13 +94,13 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
     TYPES: BEGIN OF ty_changed,
              filename   TYPE string,
              path       TYPE string,
-             changed_by TYPE xubname,
+             changed_by TYPE syuname,
            END OF ty_changed.
 
-    DATA: ls_comment    TYPE zif_abapgit_definitions=>ty_comment,
+    DATA: ls_comment    TYPE zif_abapgit_git_definitions=>ty_comment,
           ls_files      TYPE zif_abapgit_definitions=>ty_stage_files,
           lt_changed    TYPE STANDARD TABLE OF ty_changed WITH DEFAULT KEY,
-          lt_users      TYPE STANDARD TABLE OF xubname WITH DEFAULT KEY,
+          lt_users      TYPE STANDARD TABLE OF syuname WITH DEFAULT KEY,
           ls_user_files LIKE ls_files,
           lv_changed_by LIKE LINE OF lt_users,
           lo_stage      TYPE REF TO zcl_abapgit_stage.
@@ -113,7 +113,9 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
     ls_files = zcl_abapgit_factory=>get_stage_logic( )->get( io_repo ).
 
     LOOP AT ls_files-local ASSIGNING <ls_local>.
-      lv_changed_by = zcl_abapgit_objects=>changed_by( <ls_local>-item ).
+      lv_changed_by = zcl_abapgit_objects=>changed_by(
+        is_item     = <ls_local>-item
+        iv_filename = <ls_local>-file-filename ).
       APPEND lv_changed_by TO lt_users.
       APPEND INITIAL LINE TO lt_changed ASSIGNING <ls_changed>.
       <ls_changed>-changed_by = lv_changed_by.
@@ -153,12 +155,11 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
           APPEND <ls_local> TO ls_user_files-local.
 
           LOOP AT ls_files-remote ASSIGNING <ls_remote>
+              USING KEY file
               WHERE filename = <ls_local>-file-filename
               AND path <> <ls_local>-file-path
               AND filename <> 'package.devc.xml'.
-            mi_log->add_info( |rm: {
-              <ls_remote>-path } {
-              <ls_remote>-filename }| ).
+            mi_log->add_info( |rm: { <ls_remote>-path } { <ls_remote>-filename }| ).
 
 * rm old file when object has moved
             lo_stage->rm(
@@ -186,7 +187,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
   METHOD push_deletions.
 
     DATA: lo_stage   TYPE REF TO zcl_abapgit_stage,
-          ls_comment TYPE zif_abapgit_definitions=>ty_comment.
+          ls_comment TYPE zif_abapgit_git_definitions=>ty_comment.
 
     FIELD-SYMBOLS: <ls_remote> LIKE LINE OF is_files-remote.
 
@@ -194,23 +195,21 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
 
     CREATE OBJECT lo_stage.
 
-    ls_comment-comment = 'BG: Deletion' ##NO_TEXT.
+    ls_comment-comment = 'BG: Deletion'.
 
     LOOP AT is_files-remote ASSIGNING <ls_remote>.
 
-      mi_log->add_info( |removed: {
-        <ls_remote>-path } {
-        <ls_remote>-filename }| ).
+      mi_log->add_info( |removed: { <ls_remote>-path } { <ls_remote>-filename }| ).
 
       lo_stage->rm( iv_path     = <ls_remote>-path
                     iv_filename = <ls_remote>-filename ).
 
-      CONCATENATE ls_comment-comment zif_abapgit_definitions=>c_newline <ls_remote>-filename
+      CONCATENATE ls_comment-comment cl_abap_char_utilities=>newline <ls_remote>-filename
         INTO ls_comment-comment.
 
     ENDLOOP.
 
-    ls_comment-committer-name  = 'Deletion' ##NO_TEXT.
+    ls_comment-committer-name  = 'Deletion'.
     ls_comment-committer-email = 'deletion@localhost'.
 
     io_repo->push( is_comment = ls_comment
@@ -221,7 +220,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
 
   METHOD zif_abapgit_background~get_description.
 
-    rv_description = 'Automatic push, auto author' ##NO_TEXT.
+    rv_description = 'Automatic push, auto author'.
 
   ENDMETHOD.
 
@@ -241,7 +240,7 @@ CLASS ZCL_ABAPGIT_BACKGROUND_PUSH_AU IMPLEMENTATION.
     ls_files = zcl_abapgit_factory=>get_stage_logic( )->get( io_repo ).
 
     IF lines( ls_files-local ) = 0 AND lines( ls_files-remote ) = 0.
-      ii_log->add_info( 'Nothing to stage' ) ##NO_TEXT.
+      ii_log->add_info( 'Nothing to stage' ).
       RETURN.
     ENDIF.
 

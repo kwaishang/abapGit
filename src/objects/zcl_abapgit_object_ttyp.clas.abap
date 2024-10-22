@@ -2,15 +2,14 @@ CLASS zcl_abapgit_object_ttyp DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
+    CONSTANTS c_longtext_id_ttyp TYPE dokil-id VALUE 'TT'.
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
+CLASS zcl_abapgit_object_ttyp IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
@@ -27,27 +26,11 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
 
   METHOD zif_abapgit_object~delete.
 
-    DATA: lv_objname TYPE rsedd0-ddobjname.
-
     IF zif_abapgit_object~exists( ) = abap_false.
       RETURN.
     ENDIF.
 
-    lv_objname = ms_item-obj_name.
-
-    CALL FUNCTION 'RS_DD_DELETE_OBJ'
-      EXPORTING
-        no_ask               = abap_true
-        objname              = lv_objname
-        objtype              = 'A'
-      EXCEPTIONS
-        not_executed         = 1
-        object_not_found     = 2
-        object_not_specified = 3
-        permission_failure   = 4.
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise_t100( ).
-    ENDIF.
+    delete_ddic( 'A' ).
 
   ENDMETHOD.
 
@@ -62,12 +45,14 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
 
     io_xml->read( EXPORTING iv_name = 'DD40V'
                   CHANGING cg_data = ls_dd40v ).
+
     io_xml->read( EXPORTING iv_name = 'DD42V'
                   CHANGING cg_data = lt_dd42v ).
     io_xml->read( EXPORTING iv_name = 'DD43V'
                   CHANGING cg_data = lt_dd43v ).
 
-    corr_insert( iv_package = iv_package iv_object_class = 'DICT' ).
+    corr_insert( iv_package = iv_package
+                 ig_object_class = 'DICT' ).
 
     lv_name = ms_item-obj_name. " type conversion
 
@@ -106,6 +91,9 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
       zcx_abapgit_exception=>raise( lv_msg ).
     ENDIF.
 
+    deserialize_longtexts( ii_xml         = io_xml
+                           iv_longtext_id = c_longtext_id_ttyp ).
+
     zcl_abapgit_objects_activation=>add_item( ms_item ).
 
   ENDMETHOD.
@@ -115,16 +103,19 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
 
     DATA: lv_typename TYPE dd40l-typename.
 
-
     SELECT SINGLE typename FROM dd40l INTO lv_typename
-      WHERE typename = ms_item-obj_name
-      AND as4local = 'A'.
+      WHERE typename = ms_item-obj_name.
     rv_bool = boolc( sy-subrc = 0 ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -136,7 +127,6 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-ddic = abap_true.
   ENDMETHOD.
 
 
@@ -154,16 +144,24 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECT=>JUMP
+  ENDMETHOD.
 
-    jump_se11( iv_radio = 'RSRD1-DDTYPE'
-               iv_field = 'RSRD1-DDTYPE_VAL' ).
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
     DATA: lv_name  TYPE ddobjname,
+          lv_state TYPE ddgotstate,
           lt_dd42v TYPE dd42v_tab,
           lt_dd43v TYPE dd43v_tab,
           ls_dd40v TYPE dd40v.
@@ -177,6 +175,7 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
         state         = 'A'
         langu         = mv_language
       IMPORTING
+        gotstate      = lv_state
         dd40v_wa      = ls_dd40v
       TABLES
         dd42v_tab     = lt_dd42v
@@ -189,8 +188,8 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
-    IF ls_dd40v IS INITIAL.
-      RETURN. " does not exist in system
+    IF ls_dd40v IS INITIAL OR lv_state <> 'A'.
+      RETURN.
     ENDIF.
 
     CLEAR: ls_dd40v-as4user,
@@ -207,6 +206,9 @@ CLASS ZCL_ABAPGIT_OBJECT_TTYP IMPLEMENTATION.
                  ig_data = lt_dd42v ).
     io_xml->add( iv_name = 'DD43V'
                  ig_data = lt_dd43v ).
+
+    serialize_longtexts( ii_xml         = io_xml
+                         iv_longtext_id = c_longtext_id_ttyp ).
 
   ENDMETHOD.
 ENDCLASS.

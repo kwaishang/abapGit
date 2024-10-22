@@ -28,11 +28,20 @@ CLASS zcl_abapgit_xml DEFINITION
   PRIVATE SECTION.
 
     METHODS error
-      IMPORTING ii_parser TYPE REF TO if_ixml_parser
-      RAISING   zcx_abapgit_exception.
-    METHODS display_version_mismatch
-      RAISING   zcx_abapgit_exception.
-
+      IMPORTING
+        !ii_parser TYPE REF TO if_ixml_parser
+      RAISING
+        zcx_abapgit_exception .
+    METHODS raise_version_mismatch
+      IMPORTING
+        !iv_vers TYPE string
+      RAISING
+        zcx_abapgit_exception .
+    METHODS raise_exception_for
+      IMPORTING
+        !ii_error TYPE REF TO if_ixml_parse_error
+      RAISING
+        zcx_abapgit_exception .
 ENDCLASS.
 
 
@@ -47,83 +56,16 @@ CLASS zcl_abapgit_xml IMPLEMENTATION.
   ENDMETHOD.
 
 
-  METHOD display_version_mismatch.
-
-    DATA: lv_version TYPE string.
-    DATA: lv_file    TYPE string.
-
-    lv_version = |abapGit version: { zif_abapgit_version=>gc_abap_version }|. "#EC NOTEXT
-    IF mv_filename IS NOT INITIAL.
-      lv_file = |File: { mv_filename }|.  "#EC NOTEXT
-    ENDIF.
-
-    CALL FUNCTION 'POPUP_TO_INFORM'
-      EXPORTING
-        titel = 'abapGit XML version mismatch'  "#EC NOTEXT
-        txt1  = 'abapGit XML version mismatch'  "#EC NOTEXT
-        txt2  = 'See http://larshp.github.io/abapGit/other-xml-mismatch.html' "#EC NOTEXT
-        txt3  = lv_version
-        txt4  = lv_file.
-
-    IF mv_filename IS INITIAL.
-      zcx_abapgit_exception=>raise( 'abapGit XML version mismatch' ). "#EC NOTEXT
-    ELSE.
-      zcx_abapgit_exception=>raise( |abapGit XML version mismatch in file { mv_filename }| ). "#EC NOTEXT
-    ENDIF.
-
-  ENDMETHOD.
-
-
   METHOD error.
 
-    DATA: lv_error  TYPE i,
-          lv_column TYPE string,
-          lv_line   TYPE string,
-          lv_reason TYPE string,
-          lv_txt1   TYPE string,
-          lv_txt2   TYPE string,
-          lv_txt3   TYPE string,
-          lv_txt4   TYPE string,
-          lv_times  TYPE i,
-          li_error  TYPE REF TO if_ixml_parse_error.
-
     IF ii_parser->num_errors( ) <> 0.
-      lv_times = ii_parser->num_errors( ).
-
-      DO lv_times TIMES.
-        lv_error = sy-index - 1.
-        li_error = ii_parser->get_error( lv_error ).
-
-        lv_column = li_error->get_column( ).
-        lv_line   = li_error->get_line( ).
-        lv_reason = li_error->get_reason( ).
-
-        IF mv_filename IS NOT INITIAL.
-          lv_txt1 = |File: { mv_filename }|.  "#EC NOTEXT
-          lv_txt2 = |Column: { lv_column }|.  "#EC NOTEXT
-          lv_txt3 = |Line: { lv_line }|.      "#EC NOTEXT
-          lv_txt4 = lv_reason.
-        ELSE.
-          lv_txt1 = |Column: { lv_column }|.  "#EC NOTEXT
-          lv_txt2 = |Line: { lv_line }|.      "#EC NOTEXT
-          lv_txt3 = lv_reason.
-          CLEAR lv_txt4.
-        ENDIF.
-
-        CALL FUNCTION 'POPUP_TO_INFORM'
-          EXPORTING
-            titel = 'Error from XML parser'   "#EC NOTEXT
-            txt1  = lv_txt1
-            txt2  = lv_txt2
-            txt3  = lv_txt3
-            txt4  = lv_txt4.
-      ENDDO.
+      raise_exception_for( ii_parser->get_error( 0 ) ).
     ENDIF.
 
     IF mv_filename IS INITIAL.
-      zcx_abapgit_exception=>raise( |Error while parsing XML| ). "#EC NOTEXT
+      zcx_abapgit_exception=>raise( |Error while parsing XML| ).
     ELSE.
-      zcx_abapgit_exception=>raise( |Error while parsing XML file { mv_filename }| ). "#EC NOTEXT
+      zcx_abapgit_exception=>raise( |Error while parsing XML file { mv_filename }| ).
     ENDIF.
 
   ENDMETHOD.
@@ -153,16 +95,50 @@ CLASS zcl_abapgit_xml IMPLEMENTATION.
     li_istream->close( ).
 
 
-    li_element = mi_xml_doc->find_from_name_ns( depth = 0 name = c_abapgit_tag ).
+    li_element = mi_xml_doc->find_from_name_ns( depth = 0
+                                                name = c_abapgit_tag ).
     li_version = li_element->if_ixml_node~get_attributes(
-      )->get_named_item_ns( c_attr_version ) ##no_text.
-    IF li_version->get_value( ) <> zif_abapgit_version=>gc_xml_version.
-      display_version_mismatch( ).
+      )->get_named_item_ns( c_attr_version ).
+    IF li_version->get_value( ) <> zif_abapgit_version=>c_xml_version.
+      raise_version_mismatch( li_version->get_value( ) ).
     ENDIF.
 
 * buffer serializer metadata. Git node will be removed lateron
     ms_metadata-class   = li_element->get_attribute_ns( c_attr_serializer ).
     ms_metadata-version = li_element->get_attribute_ns( c_attr_serializer_version ).
+
+  ENDMETHOD.
+
+
+  METHOD raise_exception_for.
+    DATA lv_message TYPE string.
+
+    lv_message = |XML parser error: { ii_error->get_reason( ) }, | &&
+                 |Line { ii_error->get_line( ) } | &&
+                 |Col. { ii_error->get_column( ) }|.
+
+    IF mv_filename IS NOT INITIAL.
+      lv_message = lv_message && | File { mv_filename }|.
+    ENDIF.
+
+    zcx_abapgit_exception=>raise( lv_message ).
+
+  ENDMETHOD.
+
+
+  METHOD raise_version_mismatch.
+
+    DATA lv_text TYPE string.
+
+    lv_text = |The XML versions do not match, expected: { zif_abapgit_version=>c_xml_version }, actual: { iv_vers }|.
+
+    IF mv_filename IS NOT INITIAL.
+      lv_text = lv_text && |, file: { mv_filename }|.
+    ENDIF.
+
+    lv_text = lv_text && | (see https://docs.abapgit.org/other-xml-mismatch.html)|.
+
+    zcx_abapgit_exception=>raise( lv_text ).
 
   ENDMETHOD.
 
@@ -174,7 +150,6 @@ CLASS zcl_abapgit_xml IMPLEMENTATION.
           li_renderer      TYPE REF TO if_ixml_renderer,
           li_streamfactory TYPE REF TO if_ixml_stream_factory.
 
-
     li_streamfactory = mi_ixml->create_stream_factory( ).
 
     li_ostream = li_streamfactory->create_ostream_cstring( rv_xml ).
@@ -184,6 +159,8 @@ CLASS zcl_abapgit_xml IMPLEMENTATION.
     li_renderer->set_normalizing( iv_normalize ).
 
     li_renderer->render( ).
+
+    " handling of BOM moved to zcl_abapgit_convert=>string_to_xstring_utf8_bom
 
   ENDMETHOD.
 ENDCLASS.

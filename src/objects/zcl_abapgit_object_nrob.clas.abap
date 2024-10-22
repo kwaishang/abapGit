@@ -2,8 +2,6 @@ CLASS zcl_abapgit_object_nrob DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     METHODS:
@@ -14,7 +12,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
+CLASS zcl_abapgit_object_nrob IMPLEMENTATION.
 
 
   METHOD delete_intervals.
@@ -43,7 +41,7 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
         subobject_not_found        = 8
         OTHERS                     = 9.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_INTERVAL_LIST' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     IF lines( lt_list ) = 0.
@@ -68,7 +66,7 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
         object_not_found = 1
         OTHERS           = 2.
     IF sy-subrc <> 0 OR lv_error = abap_true.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_INTERVAL_UPDATE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     CALL FUNCTION 'NUMBER_RANGE_UPDATE_CLOSE'
@@ -79,7 +77,7 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
         object_not_initialized = 2
         OTHERS                 = 3.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_UPDATE_CLOSE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -140,7 +138,7 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
         wrong_indicator    = 3
         OTHERS             = 4.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_OBJECT_DELETE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -152,11 +150,58 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
           ls_attributes TYPE tnro,
           ls_text       TYPE tnrot.
 
+    FIELD-SYMBOLS <lv_any> TYPE any.
 
     io_xml->read( EXPORTING iv_name = 'ATTRIBUTES'
                   CHANGING cg_data = ls_attributes ).
     io_xml->read( EXPORTING iv_name = 'TEXT'
                   CHANGING cg_data = ls_text ).
+
+    ASSIGN COMPONENT 'CHANGED_AT' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      GET TIME STAMP FIELD <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'CHANGED_BY' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uname.
+    ENDIF.
+    ASSIGN COMPONENT 'ENAME' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uname.
+    ENDIF.
+    ASSIGN COMPONENT 'EDATE' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-datum.
+    ENDIF.
+    ASSIGN COMPONENT 'ETIME' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uzeit.
+    ENDIF.
+
+    ASSIGN COMPONENT 'UNAME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uname.
+    ENDIF.
+    ASSIGN COMPONENT 'UDATE' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-datum.
+    ENDIF.
+    ASSIGN COMPONENT 'UTIME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uzeit.
+    ENDIF.
+    ASSIGN COMPONENT 'ENAME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uname.
+    ENDIF.
+    ASSIGN COMPONENT 'EDATE' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-datum.
+    ENDIF.
+    ASSIGN COMPONENT 'ETIME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      <lv_any> = sy-uzeit.
+    ENDIF.
 
     CALL FUNCTION 'NUMBER_RANGE_OBJECT_UPDATE'
       EXPORTING
@@ -173,8 +218,11 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
         wrong_indicator           = 5
         OTHERS                    = 6.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_OBJECT_UPDATE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
+
+    tadir_insert( iv_package ).
+    corr_insert( iv_package ).
 
     CALL FUNCTION 'NUMBER_RANGE_OBJECT_CLOSE'
       EXPORTING
@@ -182,10 +230,8 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
       EXCEPTIONS
         object_not_initialized = 1.
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_OBJECT_CLOSE' ).
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
-
-    tadir_insert( iv_package ).
 
   ENDMETHOD.
 
@@ -207,6 +253,11 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-late TO rt_steps.
   ENDMETHOD.
@@ -214,7 +265,6 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-late_deser = abap_true.
   ENDMETHOD.
 
 
@@ -248,20 +298,22 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
     ls_bcdata-fval = '=DISP'.
     APPEND ls_bcdata TO lt_bcdata.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SNRO'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bcdata
-      EXCEPTIONS
-        OTHERS    = 1.
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SNRO'
+      it_bdcdata = lt_bcdata ).
 
-    IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from ABAP4_CALL_TRANSACTION, NROB' ).
-    ENDIF.
+    rv_exit = abap_true.
 
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -270,6 +322,8 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
     DATA: lv_object     TYPE tnro-object,
           ls_attributes TYPE tnro,
           ls_text       TYPE tnrot.
+
+    FIELD-SYMBOLS <lv_any> TYPE any.
 
 
     lv_object = ms_item-obj_name.
@@ -287,7 +341,53 @@ CLASS ZCL_ABAPGIT_OBJECT_NROB IMPLEMENTATION.
     IF sy-subrc = 1.
       RETURN.
     ELSEIF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'error from NUMBER_RANGE_OBJECT_READ' ).
+      zcx_abapgit_exception=>raise_t100( ).
+    ENDIF.
+
+    ASSIGN COMPONENT 'CHANGED_AT' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'CHANGED_BY' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'ENAME' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'EDATE' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'ETIME' OF STRUCTURE ls_attributes TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+
+    ASSIGN COMPONENT 'UNAME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'UDATE' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'UTIME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'ENAME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'EDATE' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
+    ENDIF.
+    ASSIGN COMPONENT 'ETIME' OF STRUCTURE ls_text TO <lv_any>.
+    IF sy-subrc = 0.
+      CLEAR <lv_any>.
     ENDIF.
 
     io_xml->add( iv_name = 'ATTRIBUTES'

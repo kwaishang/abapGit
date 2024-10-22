@@ -2,11 +2,15 @@ CLASS zcl_abapgit_object_form DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
+
     METHODS constructor
       IMPORTING
-        is_item     TYPE zif_abapgit_definitions=>ty_item
-        iv_language TYPE spras.
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -15,7 +19,7 @@ CLASS zcl_abapgit_object_form DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
     CONSTANTS: c_extension_xml      TYPE string         VALUE 'xml' ##NO_TEXT.
     DATA: mv_form_name  TYPE itcta-tdform.
 
-    TYPES: BEGIN OF tys_form_data,
+    TYPES: BEGIN OF ty_s_form_data,
              form_header   TYPE itcta,
              text_header   TYPE thead,
              orig_language TYPE sy-langu,
@@ -25,54 +29,54 @@ CLASS zcl_abapgit_object_form DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
              strings       TYPE STANDARD TABLE OF itcds WITH DEFAULT KEY,
              tabs          TYPE STANDARD TABLE OF itcdq WITH DEFAULT KEY,
              windows       TYPE STANDARD TABLE OF itctw WITH DEFAULT KEY,
-           END OF tys_form_data,
-           tyt_form_data   TYPE STANDARD TABLE OF tys_form_data WITH DEFAULT KEY,
-           tyt_form_header TYPE STANDARD TABLE OF itcta WITH DEFAULT KEY,
-           tys_form_header TYPE LINE OF tyt_form_header,
-           tyt_text_header TYPE STANDARD TABLE OF thead WITH DEFAULT KEY,
-           tys_text_header TYPE LINE OF tyt_text_header,
-           tyt_lines       TYPE tline_tab.
+           END OF ty_s_form_data,
+           ty_t_form_data   TYPE STANDARD TABLE OF ty_s_form_data WITH DEFAULT KEY,
+           ty_t_form_header TYPE STANDARD TABLE OF itcta WITH DEFAULT KEY,
+           ty_s_form_header TYPE LINE OF ty_t_form_header,
+           ty_t_text_header TYPE STANDARD TABLE OF thead WITH DEFAULT KEY,
+           ty_s_text_header TYPE LINE OF ty_t_text_header,
+           ty_t_lines       TYPE tline_tab.
 
     METHODS get_last_changes
       IMPORTING
         iv_form_name           TYPE zif_abapgit_definitions=>ty_item-obj_name
       RETURNING
-        VALUE(rs_last_changed) TYPE tys_form_header.
+        VALUE(rs_last_changed) TYPE ty_s_form_header.
 
     METHODS build_extra_from_header
       IMPORTING
-        is_header        TYPE tys_form_header
+        is_header        TYPE ty_s_form_header
       RETURNING
         VALUE(rv_result) TYPE string.
 
     METHODS build_extra_from_header_old
       IMPORTING
-        is_header        TYPE tys_form_header
+        is_header        TYPE ty_s_form_header
       RETURNING
         VALUE(rv_result) TYPE string.
 
     METHODS _save_form
       IMPORTING
-        it_lines     TYPE zcl_abapgit_object_form=>tyt_lines
+        it_lines     TYPE ty_t_lines
       CHANGING
-        cs_form_data TYPE zcl_abapgit_object_form=>tys_form_data.
+        cs_form_data TYPE ty_s_form_data.
 
     METHODS extract_tdlines
       IMPORTING
-        is_form_data    TYPE zcl_abapgit_object_form=>tys_form_data
+        is_form_data    TYPE ty_s_form_data
       RETURNING
-        VALUE(rt_lines) TYPE zcl_abapgit_object_form=>tyt_lines
+        VALUE(rt_lines) TYPE ty_t_lines
       RAISING
         zcx_abapgit_exception.
 
     METHODS _clear_changed_fields
       CHANGING
-        cs_form_data TYPE zcl_abapgit_object_form=>tys_form_data.
+        cs_form_data TYPE ty_s_form_data.
 
     METHODS compress_lines
       IMPORTING
-        is_form_data TYPE zcl_abapgit_object_form=>tys_form_data
-        it_lines     TYPE zcl_abapgit_object_form=>tyt_lines
+        is_form_data TYPE ty_s_form_data
+        it_lines     TYPE ty_t_lines
       RAISING
         zcx_abapgit_exception.
 
@@ -80,41 +84,36 @@ CLASS zcl_abapgit_object_form DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
       IMPORTING
         iv_object_name        TYPE zif_abapgit_definitions=>ty_item-obj_name
       RETURNING
-        VALUE(rt_text_header) TYPE zcl_abapgit_object_form=>tyt_text_header.
+        VALUE(rt_text_header) TYPE ty_t_text_header.
 
     METHODS _read_form
       IMPORTING
-        is_text_header TYPE zcl_abapgit_object_form=>tys_text_header
+        is_text_header TYPE ty_s_text_header
       EXPORTING
         ev_form_found  TYPE abap_bool
-        es_form_data   TYPE zcl_abapgit_object_form=>tys_form_data
-        et_lines       TYPE zcl_abapgit_object_form=>tyt_lines.
+        es_form_data   TYPE ty_s_form_data
+        et_lines       TYPE ty_t_lines.
 
     METHODS _sort_tdlines_by_windows
       CHANGING
-        ct_form_windows TYPE zcl_abapgit_object_form=>tys_form_data-windows
-        ct_lines        TYPE zcl_abapgit_object_form=>tyt_lines.
+        ct_form_windows TYPE ty_s_form_data-windows
+        ct_lines        TYPE ty_t_lines.
 
     METHODS order_check_and_insert
       RAISING
         zcx_abapgit_exception.
-
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
+CLASS zcl_abapgit_object_form IMPLEMENTATION.
 
 
   METHOD build_extra_from_header.
 
-    DATA: lv_tdspras TYPE laiso.
+    DATA lv_tdspras TYPE laiso.
 
-    CALL FUNCTION 'CONVERSION_EXIT_ISOLA_OUTPUT'
-      EXPORTING
-        input  = is_header-tdspras
-      IMPORTING
-        output = lv_tdspras.
+    lv_tdspras = zcl_abapgit_convert=>conversion_exit_isola_output( is_header-tdspras ).
 
     rv_result = c_objectname_tdlines && '_' && lv_tdspras.
 
@@ -129,12 +128,12 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
   METHOD compress_lines.
 
     DATA lv_string TYPE string.
-    DATA lo_xml TYPE REF TO zcl_abapgit_xml_output.
+    DATA li_xml TYPE REF TO zif_abapgit_xml_output.
 
-    CREATE OBJECT lo_xml.
-    lo_xml->add( iv_name = c_objectname_tdlines
+    CREATE OBJECT li_xml TYPE zcl_abapgit_xml_output.
+    li_xml->add( iv_name = c_objectname_tdlines
                  ig_data = it_lines ).
-    lv_string = lo_xml->render( ).
+    lv_string = li_xml->render( ).
     IF lv_string IS NOT INITIAL.
       mo_files->add_string( iv_extra  =
                     build_extra_from_header( is_form_data-form_header )
@@ -147,8 +146,11 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
   METHOD constructor.
 
-    super->constructor( is_item     = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     mv_form_name = ms_item-obj_name.
 
@@ -158,7 +160,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
   METHOD extract_tdlines.
 
     DATA lv_string TYPE string.
-    DATA lo_xml TYPE REF TO zcl_abapgit_xml_input.
+    DATA li_xml TYPE REF TO zif_abapgit_xml_input.
 
     TRY.
         lv_string = mo_files->read_string( iv_extra =
@@ -172,8 +174,8 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
     ENDTRY.
 
-    CREATE OBJECT lo_xml EXPORTING iv_xml = lv_string.
-    lo_xml->read( EXPORTING iv_name = c_objectname_tdlines
+    CREATE OBJECT li_xml TYPE zcl_abapgit_xml_input EXPORTING iv_xml = lv_string.
+    li_xml->read( EXPORTING iv_name = c_objectname_tdlines
                   CHANGING  cg_data = rt_lines ).
 
   ENDMETHOD.
@@ -195,7 +197,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
       TABLES
         selections    = rt_text_header
       EXCEPTIONS
-        OTHERS        = 1 ##fm_subrc_ok ##NO_TEXT.  "#EC CI_SUBRC
+        OTHERS        = 1 ##FM_SUBRC_OK.  "#EC CI_SUBRC
 
   ENDMETHOD.
 
@@ -220,7 +222,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
   METHOD order_check_and_insert.
 
-    DATA: ls_order TYPE e071k-trkorr.
+    DATA: lv_order TYPE e071k-trkorr.
 
     CALL FUNCTION 'SAPSCRIPT_ORDER_CHECK'
       EXPORTING
@@ -242,7 +244,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
         form           = mv_form_name
         masterlang     = mv_language
       CHANGING
-        order          = ls_order
+        order          = lv_order
       EXCEPTIONS
         invalid_input  = 1
         order_canceled = 2
@@ -257,7 +259,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
   METHOD zif_abapgit_object~changed_by.
 
-    DATA: ls_last_changed TYPE tys_form_header.
+    DATA: ls_last_changed TYPE ty_s_form_header.
 
     ls_last_changed = get_last_changes( ms_item-obj_name ).
 
@@ -284,9 +286,9 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
   METHOD zif_abapgit_object~deserialize.
 
-    DATA: lt_form_data            TYPE tyt_form_data.
-    DATA: lt_lines TYPE tyt_lines.
-    FIELD-SYMBOLS: <ls_form_data> TYPE LINE OF tyt_form_data.
+    DATA: lt_form_data            TYPE ty_t_form_data.
+    DATA: lt_lines TYPE ty_t_lines.
+    FIELD-SYMBOLS: <ls_form_data> TYPE LINE OF ty_t_form_data.
 
     io_xml->read( EXPORTING iv_name = c_objectname_form
                   CHANGING  cg_data = lt_form_data ).
@@ -315,17 +317,29 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
   METHOD zif_abapgit_object~exists.
 
+    DATA lv_lang TYPE sy-langu.
+
+* this will try to read the FORM in language EN
+* if it exists in other language, then "found" will be set to abap_false
+* so check the "olanguage" to see if the FORM exists
     CALL FUNCTION 'READ_FORM'
       EXPORTING
         form             = mv_form_name
         read_only_header = abap_true
       IMPORTING
-        found            = rv_bool.
+        olanguage        = lv_lang.
+
+    rv_bool = boolc( lv_lang IS NOT INITIAL ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -336,10 +350,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_metadata.
-
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
-
   ENDMETHOD.
 
 
@@ -372,38 +383,43 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
     FIELD-SYMBOLS: <ls_bdcdata> LIKE LINE OF lt_bdcdata.
 
     APPEND INITIAL LINE TO lt_bdcdata ASSIGNING <ls_bdcdata>.
-    <ls_bdcdata>-program  = 'SAPMSSCF' ##NO_TEXT.
-    <ls_bdcdata>-dynpro   = '1102' ##NO_TEXT.
+    <ls_bdcdata>-program  = 'SAPMSSCF'.
+    <ls_bdcdata>-dynpro   = '1102'.
     <ls_bdcdata>-dynbegin = abap_true.
 
     APPEND INITIAL LINE TO lt_bdcdata ASSIGNING <ls_bdcdata>.
-    <ls_bdcdata>-fnam = 'BDC_OKCODE' ##NO_TEXT.
-    <ls_bdcdata>-fval = '=SHOW' ##NO_TEXT.
+    <ls_bdcdata>-fnam = 'BDC_OKCODE'.
+    <ls_bdcdata>-fval = '=SHOW'.
 
     APPEND INITIAL LINE TO lt_bdcdata ASSIGNING <ls_bdcdata>.
-    <ls_bdcdata>-fnam = 'RSSCF-TDFORM' ##NO_TEXT.
+    <ls_bdcdata>-fnam = 'RSSCF-TDFORM'.
     <ls_bdcdata>-fval = ms_item-obj_name.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SE71'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bdcdata
-      EXCEPTIONS
-        OTHERS    = 1
-        ##fm_subrc_ok.                                                   "#EC CI_SUBRC
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SE71'
+      it_bdcdata = lt_bdcdata ).
 
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 
-    DATA: lt_form_data              TYPE tyt_form_data.
-    DATA: ls_form_data              TYPE tys_form_data.
-    DATA: lt_text_header            TYPE tyt_text_header.
-    DATA: lt_lines                  TYPE tyt_lines.
+    DATA: lt_form_data              TYPE ty_t_form_data.
+    DATA: ls_form_data              TYPE ty_s_form_data.
+    DATA: lt_text_header            TYPE ty_t_text_header.
+    DATA: lt_lines                  TYPE ty_t_lines.
     DATA: lv_form_found             TYPE abap_bool.
     FIELD-SYMBOLS: <ls_text_header> LIKE LINE OF lt_text_header.
 
@@ -423,7 +439,7 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
         _clear_changed_fields( CHANGING cs_form_data = ls_form_data ).
 
         compress_lines( is_form_data = ls_form_data
-                         it_lines     = lt_lines ).
+                        it_lines     = lt_lines ).
 
         INSERT ls_form_data INTO TABLE lt_form_data.
 
@@ -488,6 +504,10 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
 
     _sort_tdlines_by_windows( CHANGING ct_form_windows  = es_form_data-windows
                                        ct_lines         = et_lines ).
+
+    es_form_data-form_header-tdversion = '00001'.
+    es_form_data-text_header-tdversion = '00001'.
+
   ENDMETHOD.
 
 
@@ -512,14 +532,13 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
         object    = cs_form_data-text_header-tdobject
         olanguage = cs_form_data-orig_language
       EXCEPTIONS
-        OTHERS    = 1
-        ##fm_subrc_ok.                                                   "#EC CI_SUBRC
+        OTHERS    = 1 ##FM_SUBRC_OK.                                                   "#EC CI_SUBRC
 
   ENDMETHOD.
 
 
   METHOD _sort_tdlines_by_windows.
-    DATA lt_lines        TYPE zcl_abapgit_object_form=>tyt_lines.
+    DATA lt_lines        TYPE ty_t_lines.
     DATA ls_lines        LIKE LINE OF lt_lines.
     DATA ls_form_windows LIKE LINE OF ct_form_windows.
     DATA lv_elt_windows  TYPE tdformat VALUE '/W'.
@@ -534,6 +553,9 @@ CLASS ZCL_ABAPGIT_OBJECT_FORM IMPLEMENTATION.
       lv_firstloop = abap_true.
       READ TABLE lt_lines INTO ls_lines WITH KEY tdformat = lv_elt_windows
                                                  tdline   = ls_form_windows-tdwindow.
+      IF sy-subrc <> 0.
+        CONTINUE. " current loop
+      ENDIF.
       LOOP AT lt_lines INTO ls_lines FROM sy-tabix.
         IF lv_firstloop = abap_false AND
            ls_lines-tdformat = lv_elt_windows.

@@ -20,19 +20,38 @@ CLASS zcl_abapgit_factory DEFINITION
         VALUE(ri_code_inspector) TYPE REF TO zif_abapgit_code_inspector
       RAISING
         zcx_abapgit_exception .
-    CLASS-METHODS get_branch_overview
-      IMPORTING
-        !io_repo                  TYPE REF TO zcl_abapgit_repo_online
-      RETURNING
-        VALUE(ri_branch_overview) TYPE REF TO zif_abapgit_branch_overview
-      RAISING
-        zcx_abapgit_exception .
     CLASS-METHODS get_stage_logic
       RETURNING
         VALUE(ri_logic) TYPE REF TO zif_abapgit_stage_logic .
     CLASS-METHODS get_cts_api
       RETURNING
         VALUE(ri_cts_api) TYPE REF TO zif_abapgit_cts_api .
+    CLASS-METHODS get_default_transport
+      RETURNING
+        VALUE(ri_default_transport) TYPE REF TO zif_abapgit_default_transport
+      RAISING
+        zcx_abapgit_exception.
+    CLASS-METHODS get_environment
+      RETURNING
+        VALUE(ri_environment) TYPE REF TO zif_abapgit_environment .
+    CLASS-METHODS get_longtexts
+      RETURNING
+        VALUE(ri_longtexts) TYPE REF TO zif_abapgit_longtexts .
+    CLASS-METHODS get_http_agent
+      RETURNING
+        VALUE(ri_http_agent) TYPE REF TO zif_abapgit_http_agent .
+    CLASS-METHODS get_lxe_texts
+      RETURNING
+        VALUE(ri_lxe_texts) TYPE REF TO zif_abapgit_lxe_texts .
+    CLASS-METHODS get_sap_namespace
+      RETURNING
+        VALUE(ri_namespace) TYPE REF TO zif_abapgit_sap_namespace .
+    CLASS-METHODS get_sap_report
+      RETURNING
+        VALUE(ri_report) TYPE REF TO zif_abapgit_sap_report.
+    CLASS-METHODS get_function_module
+      RETURNING
+        VALUE(ri_function_module) TYPE REF TO zif_abapgit_function_module.
   PROTECTED SECTION.
   PRIVATE SECTION.
 
@@ -42,22 +61,30 @@ CLASS zcl_abapgit_factory DEFINITION
         instance TYPE REF TO zif_abapgit_sap_package,
       END OF ty_sap_package .
     TYPES:
-      tty_sap_package TYPE HASHED TABLE OF ty_sap_package
-                              WITH UNIQUE KEY package .
+      ty_sap_packages TYPE HASHED TABLE OF ty_sap_package
+                                    WITH UNIQUE KEY package .
     TYPES:
-      BEGIN OF ty_code_inspector,
+      BEGIN OF ty_code_inspector_pack,
         package  TYPE devclass,
         instance TYPE REF TO zif_abapgit_code_inspector,
-      END OF ty_code_inspector .
+      END OF ty_code_inspector_pack .
     TYPES:
-      tty_code_inspector TYPE HASHED TABLE OF ty_code_inspector
-                                 WITH UNIQUE KEY package .
+      ty_code_inspector_packs TYPE HASHED TABLE OF ty_code_inspector_pack
+                                       WITH UNIQUE KEY package .
 
     CLASS-DATA gi_tadir TYPE REF TO zif_abapgit_tadir .
-    CLASS-DATA gt_sap_package TYPE tty_sap_package .
-    CLASS-DATA gt_code_inspector TYPE tty_code_inspector .
+    CLASS-DATA gt_sap_package TYPE ty_sap_packages .
+    CLASS-DATA gt_code_inspector TYPE ty_code_inspector_packs .
     CLASS-DATA gi_stage_logic TYPE REF TO zif_abapgit_stage_logic .
     CLASS-DATA gi_cts_api TYPE REF TO zif_abapgit_cts_api .
+    CLASS-DATA gi_environment TYPE REF TO zif_abapgit_environment .
+    CLASS-DATA gi_longtext TYPE REF TO zif_abapgit_longtexts .
+    CLASS-DATA gi_http_agent TYPE REF TO zif_abapgit_http_agent .
+    CLASS-DATA gi_lxe_texts TYPE REF TO zif_abapgit_lxe_texts .
+    CLASS-DATA gi_sap_namespace TYPE REF TO zif_abapgit_sap_namespace .
+    CLASS-DATA gi_sap_report TYPE REF TO zif_abapgit_sap_report.
+    CLASS-DATA gi_function_module TYPE REF TO zif_abapgit_function_module.
+    CLASS-DATA gi_default_transport TYPE REF TO zif_abapgit_default_transport .
 ENDCLASS.
 
 
@@ -65,20 +92,10 @@ ENDCLASS.
 CLASS ZCL_ABAPGIT_FACTORY IMPLEMENTATION.
 
 
-  METHOD get_branch_overview.
-
-    CREATE OBJECT ri_branch_overview
-      TYPE zcl_abapgit_branch_overview
-      EXPORTING
-        io_repo = io_repo.
-
-  ENDMETHOD.
-
-
   METHOD get_code_inspector.
 
     DATA: ls_code_inspector LIKE LINE OF gt_code_inspector.
-    FIELD-SYMBOLS: <ls_code_inspector> TYPE zcl_abapgit_factory=>ty_code_inspector.
+    FIELD-SYMBOLS: <ls_code_inspector> TYPE ty_code_inspector_pack.
 
     READ TABLE gt_code_inspector ASSIGNING <ls_code_inspector>
       WITH TABLE KEY package = iv_package.
@@ -109,6 +126,78 @@ CLASS ZCL_ABAPGIT_FACTORY IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD get_default_transport.
+
+    IF gi_default_transport IS NOT BOUND.
+      CREATE OBJECT gi_default_transport TYPE zcl_abapgit_default_transport.
+    ENDIF.
+
+    ri_default_transport = gi_default_transport.
+
+  ENDMETHOD.
+
+
+  METHOD get_environment.
+    IF gi_environment IS NOT BOUND.
+      CREATE OBJECT gi_environment TYPE zcl_abapgit_environment.
+    ENDIF.
+    ri_environment = gi_environment.
+  ENDMETHOD.
+
+
+  METHOD get_function_module.
+
+    IF gi_function_module IS INITIAL.
+      CREATE OBJECT gi_function_module TYPE zcl_abapgit_function_module.
+    ENDIF.
+
+    ri_function_module = gi_function_module.
+
+  ENDMETHOD.
+
+
+  METHOD get_http_agent.
+
+    IF gi_http_agent IS INITIAL.
+      gi_http_agent = zcl_abapgit_http_agent=>create( ).
+    ENDIF.
+
+    ri_http_agent = gi_http_agent.
+
+  ENDMETHOD.
+
+
+  METHOD get_longtexts.
+
+    IF gi_longtext IS NOT BOUND.
+      CREATE OBJECT gi_longtext TYPE zcl_abapgit_longtexts.
+    ENDIF.
+    ri_longtexts = gi_longtext.
+
+  ENDMETHOD.
+
+
+  METHOD get_lxe_texts.
+
+    IF gi_lxe_texts IS NOT BOUND.
+      CREATE OBJECT gi_lxe_texts TYPE zcl_abapgit_lxe_texts.
+    ENDIF.
+    ri_lxe_texts = gi_lxe_texts.
+
+  ENDMETHOD.
+
+
+  METHOD get_sap_namespace.
+
+    IF gi_sap_namespace IS NOT BOUND.
+      CREATE OBJECT gi_sap_namespace TYPE zcl_abapgit_sap_namespace.
+    ENDIF.
+
+    ri_namespace = gi_sap_namespace.
+
+  ENDMETHOD.
+
+
   METHOD get_sap_package.
 
     DATA: ls_sap_package TYPE ty_sap_package.
@@ -134,11 +223,21 @@ CLASS ZCL_ABAPGIT_FACTORY IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD get_sap_report.
+
+    IF gi_sap_report IS NOT BOUND.
+      CREATE OBJECT gi_sap_report TYPE zcl_abapgit_sap_report.
+    ENDIF.
+
+    ri_report = gi_sap_report.
+
+  ENDMETHOD.
+
+
   METHOD get_stage_logic.
 
     IF gi_stage_logic IS INITIAL.
-      CREATE OBJECT gi_stage_logic
-        TYPE zcl_abapgit_stage_logic.
+      CREATE OBJECT gi_stage_logic TYPE zcl_abapgit_stage_logic.
     ENDIF.
 
     ri_logic = gi_stage_logic.

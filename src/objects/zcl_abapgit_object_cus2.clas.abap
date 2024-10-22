@@ -2,30 +2,33 @@ CLASS zcl_abapgit_object_cus2 DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
 
     METHODS constructor
       IMPORTING
-        is_item     TYPE zif_abapgit_definitions=>ty_item
-        iv_language TYPE spras.
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
-    TYPES: tty_attribute_titles        TYPE STANDARD TABLE OF cus_atrt
+    TYPES: ty_attribute_titles        TYPE STANDARD TABLE OF cus_atrt
                                             WITH NON-UNIQUE DEFAULT KEY,
-           tty_attribute_countries     TYPE STANDARD TABLE OF cus_atrcou
+           ty_attribute_countries     TYPE STANDARD TABLE OF cus_atrcou
                                             WITH NON-UNIQUE DEFAULT KEY,
-           tty_attribute_components    TYPE STANDARD TABLE OF tfm18
+           ty_attribute_components    TYPE STANDARD TABLE OF tfm18
                                             WITH NON-UNIQUE DEFAULT KEY,
-           tty_attribute_comp_variants TYPE STANDARD TABLE OF cus_atrvco
+           ty_attribute_comp_variants TYPE STANDARD TABLE OF cus_atrvco
                                             WITH NON-UNIQUE DEFAULT KEY.
 
     TYPES: BEGIN OF ty_customizing_attribute,
              header              TYPE cus_atrh,
-             titles              TYPE tty_attribute_titles,
-             countries           TYPE tty_attribute_countries,
-             components          TYPE tty_attribute_components,
-             components_variants TYPE tty_attribute_comp_variants,
+             titles              TYPE ty_attribute_titles,
+             countries           TYPE ty_attribute_countries,
+             components          TYPE ty_attribute_components,
+             components_variants TYPE ty_attribute_comp_variants,
            END OF ty_customizing_attribute.
 
     DATA: mv_img_attribute TYPE cus_atr.
@@ -34,13 +37,16 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_CUS2 IMPLEMENTATION.
+CLASS zcl_abapgit_object_cus2 IMPLEMENTATION.
 
 
   METHOD constructor.
 
-    super->constructor( is_item = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     mv_img_attribute = ms_item-obj_name.
 
@@ -48,7 +54,17 @@ CLASS ZCL_ABAPGIT_OBJECT_CUS2 IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown.
+
+    DATA ls_header TYPE ty_customizing_attribute-header.
+
+    CALL FUNCTION 'S_CUS_ATTRIBUTES_READ'
+      EXPORTING
+        img_attribute    = mv_img_attribute
+      IMPORTING
+        attribute_header = ls_header.
+
+    rv_user = ls_header-luser.
+
   ENDMETHOD.
 
 
@@ -94,6 +110,10 @@ CLASS ZCL_ABAPGIT_OBJECT_CUS2 IMPLEMENTATION.
       zcx_abapgit_exception=>raise( |error from deserialize CUS2 { mv_img_attribute } S_CUS_ATTRIBUTES_SAVE| ).
     ENDIF.
 
+    corr_insert( iv_package ).
+
+    tadir_insert( iv_package ).
+
   ENDMETHOD.
 
 
@@ -112,6 +132,11 @@ CLASS ZCL_ABAPGIT_OBJECT_CUS2 IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -137,9 +162,16 @@ CLASS ZCL_ABAPGIT_OBJECT_CUS2 IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+  ENDMETHOD.
 
-    zcx_abapgit_exception=>raise( |TODO: Jump| ).
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -162,6 +194,10 @@ CLASS ZCL_ABAPGIT_OBJECT_CUS2 IMPLEMENTATION.
            ls_customizing_attribute-header-fuser,
            ls_customizing_attribute-header-ldatetime,
            ls_customizing_attribute-header-luser.
+
+    IF mo_i18n_params->ms_params-main_language_only = abap_true.
+      DELETE ls_customizing_attribute-titles WHERE spras <> mv_language.
+    ENDIF.
 
     io_xml->add( iv_name = 'CUS2'
                  ig_data = ls_customizing_attribute ).

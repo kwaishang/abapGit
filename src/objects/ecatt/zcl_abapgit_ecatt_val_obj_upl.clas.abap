@@ -43,7 +43,7 @@ CLASS zcl_abapgit_ecatt_val_obj_upl IMPLEMENTATION.
     " downport from CL_APL_ECATT_VO_UPLOAD
 
     DATA: li_section            TYPE REF TO if_ixml_element,
-          lt_buss_msg_ref       TYPE zif_abapgit_ecatt=>etvo_bus_msg_tabtype,
+          lt_buss_msg_ref       TYPE zif_abapgit_ecatt=>ty_bus_msgs,
           lv_exception_occurred TYPE etonoff,
           lo_ecatt_vo           TYPE REF TO object.
 
@@ -90,7 +90,7 @@ CLASS zcl_abapgit_ecatt_val_obj_upl IMPLEMENTATION.
     " downport from CL_APL_ECATT_VO_UPLOAD
 
     DATA: li_section            TYPE REF TO if_ixml_element,
-          ls_impl_details       TYPE zif_abapgit_ecatt=>etvoimpl_det,
+          ls_impl_details       TYPE zif_abapgit_ecatt=>ty_impl_det,
           lv_exception_occurred TYPE etonoff,
           lo_ecatt_vo           TYPE REF TO object.
 
@@ -137,8 +137,8 @@ CLASS zcl_abapgit_ecatt_val_obj_upl IMPLEMENTATION.
     " downport from CL_APL_ECATT_VO_UPLOAD
 
     DATA: li_section            TYPE REF TO if_ixml_element,
-          lv_error_prio         TYPE zif_abapgit_ecatt=>etvo_error_prio,
-          lv_invert_validation  TYPE zif_abapgit_ecatt=>etvo_invert_validation,
+          lv_error_prio         TYPE zif_abapgit_ecatt=>ty_error_prio,
+          lv_invert_validation  TYPE zif_abapgit_ecatt=>ty_invert_validation,
           lv_exception_occurred TYPE etonoff,
           lo_ecatt_vo           TYPE REF TO object.
 
@@ -221,23 +221,21 @@ CLASS zcl_abapgit_ecatt_val_obj_upl IMPLEMENTATION.
 
     FIELD-SYMBOLS: <lg_ecatt_vo> TYPE any,
                    <lg_params>   TYPE data,
-                   <lv_d_akh>    TYPE data,
-                   <lv_i_akh>    TYPE data.
+                   <lg_d_akh>    TYPE data,
+                   <lg_i_akh>    TYPE data.
 
     TRY.
         ch_object-i_devclass = ch_object-d_devclass.
 
         ASSIGN COMPONENT 'D_AKH' OF STRUCTURE ch_object
-               TO <lv_d_akh>. " doesn't exist in 702
+               TO <lg_d_akh>. " doesn't exist in 702
         ASSIGN COMPONENT 'I_AKH' OF STRUCTURE ch_object
-               TO <lv_i_akh>. " doesn't exist in 702
-        IF <lv_d_akh> IS ASSIGNED AND <lv_i_akh> IS ASSIGNED.
-          <lv_i_akh> = <lv_d_akh>.
+               TO <lg_i_akh>. " doesn't exist in 702
+        IF <lg_d_akh> IS ASSIGNED AND <lg_i_akh> IS ASSIGNED.
+          <lg_i_akh> = <lg_d_akh>.
         ENDIF.
 
-        super->upload(
-          CHANGING
-            ch_object = ch_object ).
+        super->upload( CHANGING ch_object = ch_object ).
 
         upload_data_from_stream( ch_object-filename ).
       CATCH cx_ecatt_apl INTO lx_ex.

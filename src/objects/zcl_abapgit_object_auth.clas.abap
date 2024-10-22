@@ -2,11 +2,16 @@ CLASS zcl_abapgit_object_auth DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
+
     METHODS constructor
       IMPORTING
-        is_item     TYPE zif_abapgit_definitions=>ty_item
-        iv_language TYPE spras.
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
+
   PROTECTED SECTION.
   PRIVATE SECTION.
     DATA: mv_fieldname TYPE authx-fieldname.
@@ -15,13 +20,16 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_AUTH IMPLEMENTATION.
+CLASS zcl_abapgit_object_auth IMPLEMENTATION.
 
 
   METHOD constructor.
 
-    super->constructor( is_item     = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     mv_fieldname = ms_item-obj_name.
 
@@ -43,34 +51,33 @@ CLASS ZCL_ABAPGIT_OBJECT_AUTH IMPLEMENTATION.
 
     DATA:
       lt_objlst TYPE susr_t_xuobject,
-      lo_auth   TYPE REF TO cl_auth_tools,
-      lv_dummy  TYPE string.
+      lo_auth   TYPE REF TO cl_auth_tools.
 
     " authority check
     CREATE OBJECT lo_auth.
     IF lo_auth->authority_check_suso( actvt     = '06'
                                       fieldname = mv_fieldname ) <> 0.
-      MESSAGE e463(01) WITH mv_fieldname INTO lv_dummy.
+      MESSAGE e463(01) WITH mv_fieldname INTO zcx_abapgit_exception=>null.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     " if field is used check
     lt_objlst = lo_auth->suso_where_used_afield( mv_fieldname ).
     IF lt_objlst IS NOT INITIAL.
-      MESSAGE i453(01) WITH mv_fieldname INTO lv_dummy.
+      MESSAGE i453(01) WITH mv_fieldname INTO zcx_abapgit_exception=>null.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     " collect fieldname into a transport task
     IF lo_auth->add_afield_to_trkorr( mv_fieldname ) <> 0.
       "no transport -> no deletion
-      MESSAGE e507(0m) INTO lv_dummy.
+      MESSAGE e507(0m) INTO zcx_abapgit_exception=>null.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
     DELETE FROM authx WHERE fieldname = mv_fieldname.
     IF sy-subrc <> 0.
-      MESSAGE e507(0m) INTO lv_dummy.
+      MESSAGE e507(0m) INTO zcx_abapgit_exception=>null.
       zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
@@ -121,6 +128,11 @@ CLASS ZCL_ABAPGIT_OBJECT_AUTH IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -128,7 +140,6 @@ CLASS ZCL_ABAPGIT_OBJECT_AUTH IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
@@ -143,13 +154,24 @@ CLASS ZCL_ABAPGIT_OBJECT_AUTH IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    IF zcl_abapgit_factory=>get_function_module( )->function_exists( 'SU20_MAINTAIN_SNGL' ) = abap_true.
+      " this function module does not exist in 740
+      CALL FUNCTION 'SU20_MAINTAIN_SNGL'
+        EXPORTING
+          id_field    = mv_fieldname
+          id_wbo_mode = abap_false.
+      rv_exit = abap_true.
+    ENDIF.
+  ENDMETHOD.
 
-* TODO, this function module does not exist in 702
-    CALL FUNCTION 'SU20_MAINTAIN_SNGL'
-      EXPORTING
-        id_field    = mv_fieldname
-        id_wbo_mode = abap_false.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 

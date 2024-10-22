@@ -4,13 +4,14 @@ CLASS zcl_abapgit_object_sprx DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
     INTERFACES:
       zif_abapgit_object.
 
-    METHODS:
-      constructor
-        IMPORTING
-          is_item     TYPE zif_abapgit_definitions=>ty_item
-          iv_language TYPE spras
-        RAISING
-          zcx_abapgit_exception.
+    METHODS constructor
+      IMPORTING
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
@@ -32,7 +33,7 @@ CLASS zcl_abapgit_object_sprx DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
         !ev_obj_name TYPE sproxhdr-obj_name .
     METHODS delta_handling
       IMPORTING
-        !io_xml          TYPE REF TO zcl_abapgit_xml_input
+        !ii_xml          TYPE REF TO zif_abapgit_xml_input
       EXPORTING
         !et_sproxhdr_new TYPE sprx_hdr_t
         !et_sproxdat_new TYPE sprx_dat_t
@@ -49,7 +50,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
+CLASS zcl_abapgit_object_sprx IMPLEMENTATION.
 
 
   METHOD check_sprx_tadir.
@@ -68,8 +69,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
             repair  = abap_true ).
 
       CATCH cx_proxy_gen_error INTO lx_error.
-        zcx_abapgit_exception=>raise( iv_text     = |{ lx_error->get_text( ) }|
-                                      ix_previous = lx_error ).
+        zcx_abapgit_exception=>raise_with_text( lx_error ).
     ENDTRY.
 
   ENDMETHOD.
@@ -77,8 +77,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
 
   METHOD constructor.
 
-    super->constructor( is_item     = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     get_object_and_name(
       IMPORTING
@@ -115,7 +118,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
       CATCH cx_proxy_gen_error.
         "No delta for this object -> create
 
-        io_xml->read(
+        ii_xml->read(
           EXPORTING
             iv_name = c_proxy-header
           CHANGING
@@ -125,7 +128,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
           zcx_abapgit_exception=>raise( |SPRX - error deserialize: { ms_item-obj_name }| ).
         ENDIF.
 
-        io_xml->read(
+        ii_xml->read(
           EXPORTING
             iv_name = c_proxy-data
           CHANGING
@@ -217,11 +220,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
     rv_user = c_user_unknown.
 
     SELECT SINGLE changed_by
-           FROM sproxhdr
-           INTO lv_changed_by
-           WHERE object     = mv_object
-           AND   obj_name   = mv_obj_name
-           AND   inactive   = abap_false.
+      FROM sproxhdr
+      INTO lv_changed_by
+      WHERE object = mv_object
+      AND obj_name = mv_obj_name
+      AND inactive = abap_false.
 
     IF sy-subrc = 0 AND lv_changed_by IS NOT INITIAL.
       rv_user = lv_changed_by.
@@ -235,24 +238,44 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
     DATA:
       lv_object      TYPE sproxhdr-object,
       lv_obj_name    TYPE sproxhdr-obj_name,
+      lv_transp_flag TYPE abap_bool,
       lv_return_code TYPE i,
       lt_log         TYPE sprx_log_t.
+
+    IF iv_package(1) <> '$'.
+      lv_transp_flag = abap_true.
+    ENDIF.
 
     get_object_and_name(
       IMPORTING
         ev_object   = lv_object
         ev_obj_name = lv_obj_name ).
 
-    cl_proxy_data=>delete_single_proxy(
-       EXPORTING
-         object           = lv_object
-         obj_name         = lv_obj_name
-       CHANGING
-         c_return_code    = lv_return_code
-         ct_log           = lt_log ).
+    TRY.
+        CALL METHOD ('CL_PROXY_DATA')=>('DELETE_SINGLE_PROXY')
+          EXPORTING
+            object           = lv_object
+            obj_name         = lv_obj_name
+            i_transport      = lv_transp_flag
+            suppress_dialogs = abap_true
+          CHANGING
+            c_return_code    = lv_return_code
+            ct_log           = lt_log.
+      CATCH cx_root.
+        cl_proxy_data=>delete_single_proxy(
+           EXPORTING
+             object           = lv_object
+             obj_name         = lv_obj_name
+             i_transport      = lv_transp_flag
+           CHANGING
+             c_return_code    = lv_return_code
+             ct_log           = lt_log ).
+    ENDTRY.
     IF lv_return_code <> 0.
       zcx_abapgit_exception=>raise( 'SPRX: Error from DELETE_SINGLE_PROXY' ).
     ENDIF.
+
+    corr_insert( iv_package ).
 
   ENDMETHOD.
 
@@ -264,9 +287,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
 
     tadir_insert( iv_package ).
 
+    corr_insert( iv_package ).
+
     delta_handling(
       EXPORTING
-        io_xml = io_xml
+        ii_xml = io_xml
       IMPORTING
         et_sproxhdr_new = lt_sproxhdr_new
         et_sproxdat_new = lt_sproxdat_new ).
@@ -296,16 +321,17 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
         status      = lv_status
         status_text = lv_status_text ).
 
-    IF lv_status = if_proxy=>c_state_active.
-      rv_bool = abap_true.
-    ELSE.
-      rv_bool = abap_false.
-    ENDIF.
+    rv_bool = boolc( lv_status = if_proxy=>c_state_active ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -331,14 +357,17 @@ CLASS ZCL_ABAPGIT_OBJECT_SPRX IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation     = 'SHOW'
-        object_name   = ms_item-obj_name
-        object_type   = ms_item-obj_type
-        in_new_window = abap_true.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 

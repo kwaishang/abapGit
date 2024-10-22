@@ -1,39 +1,58 @@
-CLASS zcl_abapgit_object_ssfo DEFINITION PUBLIC INHERITING FROM zcl_abapgit_objects_super FINAL.
+CLASS zcl_abapgit_object_ssfo DEFINITION
+  PUBLIC
+  INHERITING FROM zcl_abapgit_objects_super
+  FINAL
+  CREATE PUBLIC.
 
   PUBLIC SECTION.
-    INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
 
+    INTERFACES zif_abapgit_object.
   PROTECTED SECTION.
   PRIVATE SECTION.
-    TYPES: ty_string_range TYPE RANGE OF string.
 
-    CLASS-DATA: gt_range_node_codes TYPE ty_string_range.
-    CONSTANTS: attrib_abapgit_leadig_spaces TYPE string VALUE 'abapgit-leadig-spaces' ##NO_TEXT.
+    TYPES:
+      ty_string_range TYPE RANGE OF string .
 
-    METHODS fix_ids IMPORTING ii_xml_doc TYPE REF TO if_ixml_document.
-    METHODS set_attribute_leading_spaces IMPORTING iv_name                TYPE string
-                                                   ii_node                TYPE REF TO if_ixml_node
-                                         CHANGING  cv_within_code_section TYPE abap_bool.
-    METHODS handle_attrib_leading_spaces IMPORTING iv_name                TYPE string
-                                                   ii_node                TYPE REF TO if_ixml_node
-                                         CHANGING  cv_within_code_section TYPE abap_bool.
-    METHODS get_range_node_codes RETURNING VALUE(rt_range_node_codes) TYPE ty_string_range.
-    METHODS code_item_section_handling IMPORTING iv_name                TYPE string
-                                                 ii_node                TYPE REF TO if_ixml_node
-                                       EXPORTING ei_code_item_element   TYPE REF TO if_ixml_element
-                                       CHANGING  cv_within_code_section TYPE abap_bool
-                                       RAISING   zcx_abapgit_exception.
+    CLASS-DATA gt_range_node_codes TYPE ty_string_range .
+    CONSTANTS c_attrib_abapgit_leadig_spaces TYPE string VALUE 'abapgit-leadig-spaces' ##NO_TEXT.
+
+    METHODS fix_ids
+      IMPORTING
+        !ii_xml_doc TYPE REF TO if_ixml_document .
+    METHODS sort_texts
+      IMPORTING
+        !ii_xml_doc TYPE REF TO if_ixml_document
+      RAISING
+        zcx_abapgit_exception .
+    METHODS handle_attrib_leading_spaces
+      IMPORTING
+        !iv_name                TYPE string
+        !ii_node                TYPE REF TO if_ixml_node
+      CHANGING
+        !cv_within_code_section TYPE abap_bool .
+    METHODS get_range_node_codes
+      RETURNING
+        VALUE(rt_range_node_codes) TYPE ty_string_range .
+    METHODS code_item_section_handling
+      IMPORTING
+        !iv_name                TYPE string
+        !ii_node                TYPE REF TO if_ixml_node
+      EXPORTING
+        !ei_code_item_element   TYPE REF TO if_ixml_element
+      CHANGING
+        !cv_within_code_section TYPE abap_bool
+      RAISING
+        zcx_abapgit_exception .
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
+CLASS zcl_abapgit_object_ssfo IMPLEMENTATION.
 
 
   METHOD code_item_section_handling.
-    CONSTANTS: lc_node_item TYPE string VALUE 'item' ##NO_TEXT.
-    CONSTANTS: lc_node_text TYPE string VALUE '#text' ##NO_TEXT.
+    CONSTANTS: lc_node_item TYPE string VALUE 'item'.
+    CONSTANTS: lc_node_text TYPE string VALUE '#text'.
 
     IF iv_name IN get_range_node_codes( ).
       cv_within_code_section = abap_true.
@@ -44,7 +63,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
         TRY.
             ei_code_item_element ?= ii_node.
             RETURN.
-          CATCH cx_sy_move_cast_error ##no_handler.
+          CATCH cx_sy_move_cast_error ##NO_HANDLER.
         ENDTRY.
 
       ELSEIF iv_name NOT IN get_range_node_codes( ) AND
@@ -71,7 +90,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
         old TYPE string,
         new TYPE string,
       END OF ty_id_mapping,
-      tty_id_mapping TYPE HASHED TABLE OF ty_id_mapping
+      ty_id_mappings TYPE HASHED TABLE OF ty_id_mapping
                           WITH UNIQUE KEY old.
 
     DATA: lv_name       TYPE string,
@@ -79,7 +98,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
           li_node       TYPE REF TO if_ixml_node,
           li_attr       TYPE REF TO if_ixml_named_node_map,
           li_iterator   TYPE REF TO if_ixml_node_iterator,
-          lt_id_mapping TYPE tty_id_mapping,
+          lt_id_mapping TYPE ty_id_mappings,
           ls_id_mapping LIKE LINE OF lt_id_mapping.
 
     li_iterator = ii_xml_doc->create_iterator( ).
@@ -135,20 +154,20 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
 
     DATA: ls_range_node_code TYPE LINE OF ty_string_range.
 
-    IF me->gt_range_node_codes IS INITIAL.
+    IF gt_range_node_codes IS INITIAL.
       ls_range_node_code-sign   = 'I'.
       ls_range_node_code-option = 'EQ'.
       ls_range_node_code-low    = 'CODE'.
-      INSERT ls_range_node_code INTO TABLE me->gt_range_node_codes.
+      INSERT ls_range_node_code INTO TABLE gt_range_node_codes.
       ls_range_node_code-low    = 'GTYPES'.
-      INSERT ls_range_node_code INTO TABLE me->gt_range_node_codes.
+      INSERT ls_range_node_code INTO TABLE gt_range_node_codes.
       ls_range_node_code-low    = 'GCODING'.
-      INSERT ls_range_node_code INTO TABLE me->gt_range_node_codes.
+      INSERT ls_range_node_code INTO TABLE gt_range_node_codes.
       ls_range_node_code-low    = 'FCODING'.
-      INSERT ls_range_node_code INTO TABLE me->gt_range_node_codes.
+      INSERT ls_range_node_code INTO TABLE gt_range_node_codes.
     ENDIF.
 
-    rt_range_node_codes = me->gt_range_node_codes.
+    rt_range_node_codes = gt_range_node_codes.
 
   ENDMETHOD.
 
@@ -166,46 +185,85 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
                                     CHANGING  cv_within_code_section = cv_within_code_section ).
 
 * for downwards compatibility, this code can be removed sometime in the future
-        lv_leading_spaces = li_element->get_attribute_ns(
-          name = zcl_abapgit_object_ssfo=>attrib_abapgit_leadig_spaces ).
+        lv_leading_spaces = li_element->get_attribute_ns( c_attrib_abapgit_leadig_spaces ).
 
         lv_coding_line = li_element->get_value( ).
         IF strlen( lv_coding_line ) >= 1 AND lv_coding_line(1) <> | |.
           SHIFT lv_coding_line RIGHT BY lv_leading_spaces PLACES.
           li_element->set_value( lv_coding_line ).
         ENDIF.
-      CATCH zcx_abapgit_exception ##no_handler.
+      CATCH zcx_abapgit_exception ##NO_HANDLER.
     ENDTRY.
 
   ENDMETHOD.
 
 
-  METHOD set_attribute_leading_spaces.
+  METHOD sort_texts.
 
-*    DATA: li_element             TYPE REF TO if_ixml_element.
-*    DATA: lv_code_line           TYPE string.
-*    DATA: lv_offset              TYPE i.
-*
-*    TRY.
-*        code_item_section_handling( EXPORTING iv_name                = iv_name
-*                                              ii_node                = ii_node
-*                                    IMPORTING ei_code_item_element   = li_element
-*                                    CHANGING  cv_within_code_section = cv_within_code_section ).
-*
-*        lv_code_line = ii_node->get_value( ).
-*        "find 1st non space char
-*        FIND FIRST OCCURRENCE OF REGEX '\S' IN lv_code_line MATCH OFFSET lv_offset.
-*        IF sy-subrc = 0 AND lv_offset > 0.
-*          TRY.
-*              li_element ?= ii_node.
-*              li_element->set_attribute( name  = zcl_abapgit_object_ssfo=>attrib_abapgit_leadig_spaces
-*                                      value = |{ lv_offset }| ).
-*
-*            CATCH cx_sy_move_cast_error ##no_handler.
-*          ENDTRY.
-*        ENDIF.
-*      CATCH zcx_abapgit_exception ##no_handler.
-*    ENDTRY.
+    DATA: li_node      TYPE REF TO if_ixml_node,
+          li_item      TYPE REF TO if_ixml_node,
+          li_field     TYPE REF TO if_ixml_node,
+          li_item_list TYPE REF TO if_ixml_node_list,
+          li_iterator  TYPE REF TO if_ixml_node_iterator,
+          li_items     TYPE REF TO if_ixml_node_iterator,
+          lv_index     TYPE i,
+          lv_field     TYPE fieldname,
+          ls_item      TYPE stxfobjt,
+          lt_items     TYPE STANDARD TABLE OF stxfobjt.
+
+    FIELD-SYMBOLS <lv_field> TYPE any.
+
+    li_iterator = ii_xml_doc->create_iterator( ).
+    li_node = li_iterator->get_next( ).
+    WHILE NOT li_node IS INITIAL.
+      IF li_node->get_name( ) = 'T_CAPTION'.
+
+        " Read all records for T_CAPTION
+        CLEAR lt_items.
+        li_item_list = li_node->get_children( ).
+        li_items = li_item_list->create_iterator( ).
+        DO.
+          li_item = li_items->get_next( ).
+          IF li_item IS INITIAL.
+            EXIT.
+          ENDIF.
+          CLEAR ls_item.
+          li_field = li_item->get_first_child( ).
+          WHILE NOT li_field IS INITIAL.
+            lv_field = li_field->get_name( ).
+            ASSIGN COMPONENT lv_field OF STRUCTURE ls_item TO <lv_field>.
+            ASSERT sy-subrc = 0.
+            <lv_field> = li_field->get_value( ).
+            li_field = li_field->get_next( ).
+          ENDWHILE.
+          INSERT ls_item INTO TABLE lt_items.
+        ENDDO.
+
+        SORT lt_items.
+
+        " Write all records back after sorting
+        lv_index = 1.
+        li_items = li_item_list->create_iterator( ).
+        DO.
+          li_item = li_items->get_next( ).
+          IF li_item IS INITIAL.
+            EXIT.
+          ENDIF.
+          READ TABLE lt_items INTO ls_item INDEX lv_index.
+          li_field = li_item->get_first_child( ).
+          WHILE NOT li_field IS INITIAL.
+            lv_field = li_field->get_name( ).
+            ASSIGN COMPONENT lv_field OF STRUCTURE ls_item TO <lv_field>.
+            ASSERT sy-subrc = 0.
+            li_field->set_value( |{ <lv_field> }| ).
+            li_field = li_field->get_next( ).
+          ENDWHILE.
+          lv_index = lv_index + 1.
+        ENDDO.
+
+      ENDIF.
+      li_node = li_iterator->get_next( ).
+    ENDWHILE.
 
   ENDMETHOD.
 
@@ -235,8 +293,8 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
       EXCEPTIONS
         no_form               = 1
         OTHERS                = 2.
-    IF sy-subrc <> 0 AND sy-subrc <> 1.
-      zcx_abapgit_exception=>raise( 'Error from FB_DELETE_FORM' ).
+    IF sy-subrc <> 0.
+      zcx_abapgit_exception=>raise_t100( ).
     ENDIF.
 
   ENDMETHOD.
@@ -264,11 +322,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
       lv_name = li_node->get_name( ).
       CASE lv_name.
         WHEN 'LASTDATE'.
-          li_node->set_value(
-            sy-datum(4) && '-' && sy-datum+4(2) && '-' && sy-datum+6(2) ).
+          li_node->set_value( sy-datum(4) && '-' && sy-datum+4(2) && '-' && sy-datum+6(2) ).
         WHEN 'LASTTIME'.
-          li_node->set_value(
-            sy-uzeit(2) && ':' && sy-uzeit+2(2) && ':' && sy-uzeit+4(2) ).
+          li_node->set_value( sy-uzeit(2) && ':' && sy-uzeit+2(2) && ':' && sy-uzeit+4(2) ).
         WHEN 'FIRSTUSER' OR 'LASTUSER'.
           li_node->set_value( sy-uname && '' ).
 
@@ -326,6 +382,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD zif_abapgit_object~get_deserialize_order.
+    RETURN.
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~get_deserialize_steps.
     APPEND zif_abapgit_object=>gc_step_id-abap TO rt_steps.
   ENDMETHOD.
@@ -333,13 +394,13 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
 
   METHOD zif_abapgit_object~get_metadata.
     rs_metadata = get_metadata( ).
-    rs_metadata-delete_tadir = abap_true.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~is_active.
 
     DATA: lv_ssfo_formname TYPE tdsfname.
+    DATA lv_inactive TYPE abap_bool.
 
     lv_ssfo_formname = ms_item-obj_name.
 
@@ -347,9 +408,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
       EXPORTING
         i_formname = lv_ssfo_formname
       IMPORTING
-        o_inactive = ms_item-inactive.
+        o_inactive = lv_inactive.
 
-    rv_active = boolc( ms_item-inactive = abap_false ).
+    rv_active = boolc( lv_inactive = abap_false ).
 
   ENDMETHOD.
 
@@ -408,32 +469,36 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
     <ls_bdcdata>-fnam = 'BDC_OKCODE'.
     <ls_bdcdata>-fval = '=DISPLAY'.
 
-    CALL FUNCTION 'ABAP4_CALL_TRANSACTION'
-      STARTING NEW TASK 'GIT'
-      EXPORTING
-        tcode     = 'SMARTFORMS'
-        mode_val  = 'E'
-      TABLES
-        using_tab = lt_bdcdata
-      EXCEPTIONS
-        OTHERS    = 1
-        ##fm_subrc_ok.                                                   "#EC CI_SUBRC
+    zcl_abapgit_objects_factory=>get_gui_jumper( )->jump_batch_input(
+      iv_tcode   = 'SMARTFORMS'
+      it_bdcdata = lt_bdcdata ).
 
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~serialize.
 * see function module FB_DOWNLOAD_FORM
 
-    DATA: lo_sf                  TYPE REF TO cl_ssf_fb_smart_form,
-          lv_name                TYPE string,
-          li_node                TYPE REF TO if_ixml_node,
-          li_element             TYPE REF TO if_ixml_element,
-          li_iterator            TYPE REF TO if_ixml_node_iterator,
-          lv_formname            TYPE tdsfname,
-          li_ixml                TYPE REF TO if_ixml,
-          li_xml_doc             TYPE REF TO if_ixml_document,
-          lv_within_code_section TYPE abap_bool.
+    DATA: lo_sf       TYPE REF TO cl_ssf_fb_smart_form,
+          lv_name     TYPE string,
+          li_node     TYPE REF TO if_ixml_node,
+          li_element  TYPE REF TO if_ixml_element,
+          li_iterator TYPE REF TO if_ixml_node_iterator,
+          lv_formname TYPE tdsfname,
+          li_ixml     TYPE REF TO if_ixml,
+          li_xml_doc  TYPE REF TO if_ixml_document.
 
     li_ixml = cl_ixml=>create( ).
     li_xml_doc = li_ixml->create_document( ).
@@ -444,7 +509,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
         lo_sf->load( im_formname = lv_formname
                      im_language = '' ).
       CATCH cx_ssf_fb.
-* the smartform is not present in system, or other error occured
+* the smartform is not present in system, or other error occurred
         RETURN.
     ENDTRY.
 
@@ -465,23 +530,21 @@ CLASS ZCL_ABAPGIT_OBJECT_SSFO IMPLEMENTATION.
           OR lv_name = 'LASTUSER'.
         li_node->set_value( 'DUMMY' ).
       ENDIF.
-      set_attribute_leading_spaces( EXPORTING iv_name                = lv_name
-                                              ii_node                = li_node
-                                    CHANGING  cv_within_code_section = lv_within_code_section ).
-
       li_node = li_iterator->get_next( ).
     ENDWHILE.
 
     fix_ids( li_xml_doc ).
 
+    sort_texts( li_xml_doc ).
+
     li_element = li_xml_doc->get_root_element( ).
     li_element->set_attribute(
       name      = 'sf'
       namespace = 'xmlns'
-      value     = 'urn:sap-com:SmartForms:2000:internal-structure' ). "#EC NOTEXT
+      value     = 'urn:sap-com:SmartForms:2000:internal-structure' ).
     li_element->set_attribute(
       name  = 'xmlns'
-      value = 'urn:sap-com:sdixml-ifr:2000' ).              "#EC NOTEXT
+      value = 'urn:sap-com:sdixml-ifr:2000' ).
 
     io_xml->set_raw( li_xml_doc->get_root_element( ) ).
 

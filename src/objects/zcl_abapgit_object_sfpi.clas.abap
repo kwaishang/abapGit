@@ -2,8 +2,6 @@ CLASS zcl_abapgit_object_sfpi DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
-
   PROTECTED SECTION.
   PRIVATE SECTION.
     METHODS:
@@ -18,7 +16,7 @@ ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SFPI IMPLEMENTATION.
+CLASS zcl_abapgit_object_sfpi IMPLEMENTATION.
 
 
   METHOD interface_to_xstring.
@@ -104,7 +102,8 @@ CLASS ZCL_ABAPGIT_OBJECT_SFPI IMPLEMENTATION.
     lv_xstr = cl_ixml_80_20=>render_to_xstring( io_xml->get_raw( ) ).
 
     IF zif_abapgit_object~exists( ) = abap_true.
-      zif_abapgit_object~delete( ).
+      zif_abapgit_object~delete( iv_package   = iv_package
+                                 iv_transport = iv_transport ).
     ENDIF.
 
     TRY.
@@ -129,14 +128,18 @@ CLASS ZCL_ABAPGIT_OBJECT_SFPI IMPLEMENTATION.
 
     SELECT SINGLE name FROM fpinterface
       INTO lv_name
-      WHERE name = ms_item-obj_name
-      AND state = 'A'.
+      WHERE name = ms_item-obj_name.
     rv_bool = boolc( sy-subrc = 0 ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -171,13 +174,17 @@ CLASS ZCL_ABAPGIT_OBJECT_SFPI IMPLEMENTATION.
 
 
   METHOD zif_abapgit_object~jump.
+    " Covered by ZCL_ABAPGIT_OBJECTS=>JUMP
+  ENDMETHOD.
 
-    CALL FUNCTION 'RS_TOOL_ACCESS'
-      EXPORTING
-        operation   = 'SHOW'
-        object_name = ms_item-obj_name
-        object_type = ms_item-obj_type.
 
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 

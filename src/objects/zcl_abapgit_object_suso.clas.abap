@@ -2,16 +2,20 @@ CLASS zcl_abapgit_object_suso DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
   PUBLIC SECTION.
     INTERFACES zif_abapgit_object.
-    ALIASES mo_files FOR zif_abapgit_object~mo_files.
 
-    METHODS:
-      constructor
-        IMPORTING
-          is_item     TYPE zif_abapgit_definitions=>ty_item
-          iv_language TYPE spras.
+    METHODS constructor
+      IMPORTING
+        !is_item        TYPE zif_abapgit_definitions=>ty_item
+        !iv_language    TYPE spras
+        !io_files       TYPE REF TO zcl_abapgit_objects_files OPTIONAL
+        !io_i18n_params TYPE REF TO zcl_abapgit_i18n_params OPTIONAL
+      RAISING
+        zcx_abapgit_exception.
 
   PROTECTED SECTION.
   PRIVATE SECTION.
+    CONSTANTS c_longtext_id_suso TYPE dokil-id VALUE 'UO'.
+
     DATA:
       mv_objectname TYPE tobj-objct.
 
@@ -22,19 +26,24 @@ CLASS zcl_abapgit_object_suso DEFINITION PUBLIC INHERITING FROM zcl_abapgit_obje
 
       pre_check
         RAISING
-          zcx_abapgit_exception.
+          zcx_abapgit_exception,
+
+      regenerate_sap_all.
 
 ENDCLASS.
 
 
 
-CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
+CLASS zcl_abapgit_object_suso IMPLEMENTATION.
 
 
   METHOD constructor.
 
-    super->constructor( is_item     = is_item
-                        iv_language = iv_language ).
+    super->constructor(
+      is_item        = is_item
+      iv_language    = iv_language
+      io_files       = io_files
+      io_i18n_params = io_i18n_params ).
 
     mv_objectname = ms_item-obj_name.
 
@@ -52,7 +61,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
     SELECT SINGLE langu
            FROM dokil INTO lv_dummy
            WHERE id   = 'UO'                            "#EC CI_GENBUFF
-           AND object = lv_docu_obj.
+           AND object = lv_docu_obj.                    "#EC CI_NOORDER
 
     IF sy-subrc = 0.
 
@@ -88,18 +97,17 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
 
     DATA:
       lv_act_head            TYPE activ_auth,
-      lv_dummy               TYPE string,
       lo_suso                TYPE REF TO object,
       lv_failed              TYPE abap_bool,
       lv_suso_collect_in_cts TYPE i,
-      lv_clskey              TYPE seoclskey.
+      ls_clskey              TYPE seoclskey.
 
     " Downport: CL_SUSO_GEN doesn't exist in 702
-    lv_clskey-clsname = |CL_SUSO_GEN|.
+    ls_clskey-clsname = |CL_SUSO_GEN|.
 
     CALL FUNCTION 'SEO_CLASS_EXISTENCE_CHECK'
       EXPORTING
-        clskey        = lv_clskey
+        clskey        = ls_clskey
       EXCEPTIONS
         not_specified = 1
         not_existing  = 2
@@ -110,7 +118,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
 
     IF sy-subrc = 0.
 
-      " so these check are not executed in 702
+      " so these checks are not executed in 702
 
       CREATE OBJECT lo_suso
         TYPE
@@ -124,7 +132,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
 
       IF lv_failed = abap_true.
         " Object & does not exist; choose an existing object
-        MESSAGE s111(01) WITH mv_objectname INTO lv_dummy.
+        MESSAGE s111(01) WITH mv_objectname INTO zcx_abapgit_exception=>null.
         zcx_abapgit_exception=>raise_t100( ).
       ENDIF.
 
@@ -136,7 +144,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
           ed_mode_head  = lv_act_head.
 
       IF lv_act_head <> lc_act_delete.
-        zcx_abapgit_exception=>raise( |SUSO { mv_objectname }: Delete not allowed| ).
+        zcx_abapgit_exception=>raise( |SUSO { mv_objectname }: Delete not allowed. Check where-used in SU21| ).
       ENDIF.
 
       CALL METHOD lo_suso->('SUSO_COLLECT_IN_CTS')
@@ -154,8 +162,34 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
   ENDMETHOD.
 
 
+  METHOD regenerate_sap_all.
+
+    DATA: ls_e071  TYPE e071,
+          lt_e071  TYPE STANDARD TABLE OF e071,
+          lt_e071k TYPE STANDARD TABLE OF e071k.
+
+    ls_e071-pgmid = 'R3TR'.
+    ls_e071-object = ms_item-obj_type.
+    ls_e071-obj_name = ms_item-obj_name.
+    INSERT ls_e071 INTO TABLE lt_e071.
+
+    CALL FUNCTION 'PRGN_AFTER_IMP_SUSO_SAP_ALL'
+      EXPORTING
+        iv_tarclient  = '000'
+        iv_is_upgrade = space
+      TABLES
+        tt_e071       = lt_e071
+        tt_e071k      = lt_e071k.
+
+  ENDMETHOD.
+
+
   METHOD zif_abapgit_object~changed_by.
-    rv_user = c_user_unknown. " todo
+    SELECT SINGLE modifier FROM tobjvor INTO rv_user
+      WHERE objct = mv_objectname.
+    IF sy-subrc <> 0.
+      rv_user = c_user_unknown.
+    ENDIF.
   ENDMETHOD.
 
 
@@ -183,6 +217,8 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
         object    = mv_objectname
         type      = 'SUSO'
         operation = 'DELETE'.
+
+    regenerate_sap_all( ).
 
   ENDMETHOD.
 
@@ -234,6 +270,11 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
     DELETE FROM tobjvor WHERE objct = ms_item-obj_name.   "#EC CI_SUBRC
     INSERT tobjvor FROM TABLE lt_tobjvor.                 "#EC CI_SUBRC
 
+    deserialize_longtexts( ii_xml         = io_xml
+                           iv_longtext_id = c_longtext_id_suso ).
+
+    regenerate_sap_all( ).
+
   ENDMETHOD.
 
 
@@ -244,12 +285,18 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
 
     SELECT SINGLE objct FROM tobj INTO lv_objct
       WHERE objct = ms_item-obj_name.
+
     rv_bool = boolc( sy-subrc = 0 ).
 
   ENDMETHOD.
 
 
   METHOD zif_abapgit_object~get_comparator.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~get_deserialize_order.
     RETURN.
   ENDMETHOD.
 
@@ -282,6 +329,18 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
       EXPORTING
         object = mv_objectname.
 
+    rv_exit = abap_true.
+
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_filename_to_object.
+    RETURN.
+  ENDMETHOD.
+
+
+  METHOD zif_abapgit_object~map_object_to_filename.
+    RETURN.
   ENDMETHOD.
 
 
@@ -306,7 +365,7 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
       WHERE object = ms_item-obj_name
       AND langu = mv_language.                          "#EC CI_GENBUFF
     IF sy-subrc <> 0.
-      zcx_abapgit_exception=>raise( 'TOBJT no english description'
+      zcx_abapgit_exception=>raise( 'TOBJT no English description'
         && ' for object (' && ms_item-obj_name && ')' ).
     ENDIF.
 
@@ -337,6 +396,9 @@ CLASS ZCL_ABAPGIT_OBJECT_SUSO IMPLEMENTATION.
                  iv_name = 'TOBJVORDAT' ).
     io_xml->add( ig_data = lt_tobjvor
                  iv_name = 'TOBJVOR' ).
+
+    serialize_longtexts( ii_xml         = io_xml
+                         iv_longtext_id = c_longtext_id_suso ).
 
   ENDMETHOD.
 ENDCLASS.
